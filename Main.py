@@ -4,7 +4,7 @@ Then starts analyzing it and gets count of people went in and out of the classro
 '''
 
 import os
-from re import U
+import threading
 from time import time, sleep
 import cv2
 from picamera2 import Picamera2
@@ -14,6 +14,7 @@ from Human_Identifier import HumanInOutCounter  # Imports the Custom Model we bu
 detection_range = 100  # in cm
 USB_Camera_preferred = True  # Set to False to use PiCamera instead of USB Camera
 inside_classroom = 0  # Initial count of classroom occupancy
+video_stack = []  # Stack of videos to be analyzed
 
 def record_picamera( ultrasonic, wait_time = 10 ):
     ''' Records a video clip until human movement is detected by Ultrasonic sensor.
@@ -93,24 +94,27 @@ def analyze_video( video_filename , human_counter : HumanInOutCounter ):
 
     return net_count_in
 
-def update_occupancy( net_count, video_file, human_counter ):
-    ''' Updates the occupancy count based on net count of people entered.
-        net_count : net count of people entered (positive for in, negative for out).
-    '''
-    net_count = analyze_video(video_file, human_counter)
-    print(f"Net people entered: {net_count}")
-    inside_classroom += net_count
-    if inside_classroom < 0:
-        inside_classroom = 0  # Prevent negative count
+def process_video_stack( human_counter ):
+    ''' Processes videos in the stack one by one. '''
+    global inside_classroom
+    
+    while len(video_stack) > 0:
+        video_file = video_stack.pop(0)
+        net_count = analyze_video(video_file, human_counter)
+        print(f"Net people entered: {net_count}")
+        inside_classroom += net_count
+        if inside_classroom < 0:
+            inside_classroom = 0  # Prevent negative count
 
-    # delete the analyzed video file to save space
-    os.remove(video_file)
-    print(f"Current occupancy: {inside_classroom} people")
+        # delete the analyzed video file to save space
+        os.remove(video_file)
+        print(f"Current occupancy: {inside_classroom} people")
     
 if __name__ == "__main__":
     import sys
     import argparse
-    video_stack = []
+    
+    processing_thread = None
 
     parser = argparse.ArgumentParser(description='Video Human In/Out Counter')
     parser.add_argument('video', type=str, help='Path to video file')
@@ -147,8 +151,11 @@ if __name__ == "__main__":
 
             video_stack.append(video_file)
 
-            update_occupancy( 0, video_stack.pop(0) , human_counter )
+            if processing_thread is None or not processing_thread.is_alive():
+                processing_thread = threading.Thread(target=process_video_stack, args=(human_counter,))
+                processing_thread.start()
 
+        sleep(0.5)  # Small delay to prevent busy-waiting
         if inside_classroom > 0:
             power.on()  # Turn on power if there are people inside
         else:
