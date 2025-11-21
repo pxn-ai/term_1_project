@@ -3,6 +3,7 @@ When detected a movement through the Ultrasonic sensor, a video clip recorded an
 Then starts analyzing it and gets count of people went in and out of the classroom.
 '''
 
+import os
 from re import U
 from time import time, sleep
 import cv2
@@ -101,6 +102,9 @@ def update_occupancy( net_count, video_file, human_counter ):
     inside_classroom += net_count
     if inside_classroom < 0:
         inside_classroom = 0  # Prevent negative count
+
+    # delete the analyzed video file to save space
+    os.remove(video_file)
     print(f"Current occupancy: {inside_classroom} people")
     
 if __name__ == "__main__":
