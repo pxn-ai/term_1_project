@@ -287,8 +287,9 @@ class HumanInOutCounter:
             json.dump(results, f, indent=4)
         print(f"Results saved to {output_file}")
 
-    def get_net_entered_count(self):
+    def get_net_entered_count(self, video_path, output_path=None, show_preview=False, skip_frames=1, count_line_pos=0.5):
         """Return current counting results as integer ( net change ) """
+        self.analyze_video(self, video_path, output_path, show_preview, skip_frames, count_line_pos)
         return self.entered - self.exited
 
 # Main execution
