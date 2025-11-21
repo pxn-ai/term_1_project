@@ -1,0 +1,5 @@
+'''
+When detected a movement through the Ultrasonic sensor, a video clip recorded and saved.
+Then starts analyzing it and gets count of people went in and out of the classroom.
+'''
+
