@@ -11,12 +11,12 @@ from picamera2 import Picamera2
 from gpiozero import LED, UltrasonicSensor
 from Human_Identifier import HumanInOutCounter  # Imports the Custom Model we built
 
-detection_range = 100  # in cm
+detection_range = 20  # in cm
 USB_Camera_preferred = True  # Set to False to use PiCamera instead of USB Camera
 inside_classroom = 0  # Initial count of classroom occupancy
 video_stack = []  # Stack of videos to be analyzed
 
-def record_picamera( ultrasonic, wait_time = 10 ):
+def record_picamera( wait_time = 10 ):
     ''' Records a video clip until human movement is detected by Ultrasonic sensor.
         wait_time : duration of the wait in seconds.
     '''
@@ -32,8 +32,8 @@ def record_picamera( ultrasonic, wait_time = 10 ):
 
         while True:
             time_remaining = wait_time - (time() - start_time)
-            distance = ultrasonic.distance * 100  # Convert to cm
-            if distance < detection_range :  # If an object is detected within 100 cm
+
+            if is_human_present() :  # If an object is detected within 100 cm
                 if time_remaining <= wait_time:
                     time_remaining = wait_time  # Reset the timer if movement is detected
             if time_remaining <= 0:
@@ -43,7 +43,7 @@ def record_picamera( ultrasonic, wait_time = 10 ):
         print(f"Video saved as {video_filename}")
         return video_filename
         
-def record_usb_camera( ultrasonic, wait_time = 10 ):
+def record_usb_camera( wait_time = 10 ):
     ''' Records a video clip until human movement is detected by Ultrasonic sensor.
         wait_time : duration of the wait in seconds.
     '''
@@ -61,8 +61,8 @@ def record_usb_camera( ultrasonic, wait_time = 10 ):
                 out.write(frame)
 
             time_remaining = wait_time - (time() - start_time)
-            distance = ultrasonic.distance * 100  # Convert to cm
-            if distance < detection_range :  # If an object is detected within 100 cm
+            
+            if is_human_present() :  # If an object is detected within 100 cm
                 if time_remaining <= wait_time:
                     time_remaining = wait_time  # Reset the timer if movement is detected
             if time_remaining <= 0:
@@ -73,6 +73,13 @@ def record_usb_camera( ultrasonic, wait_time = 10 ):
         print(f"Video saved as {video_filename}")
         return video_filename
     
+def is_human_present() :
+    ''' Checks if a human is present using the Ultrasonic sensors. '''
+    global ultrasonic_left, ultrasonic_right, detection_range
+    distance_left = ultrasonic_left.distance * 100  # Convert to cm
+    distance_right = ultrasonic_right.distance * 100  # Convert to cm
+    return distance_left < detection_range or distance_right < detection_range
+
 def analyze_video( video_filename , human_counter : HumanInOutCounter ):
     ''' Analyzes the recorded video and returns count of people went in and out of the classroom.
         video_filename : path to the recorded video file.
@@ -137,15 +144,16 @@ if __name__ == "__main__":
     human_counter = HumanInOutCounter(model_size=args.model)
 
     power = LED(17)  # LED for indicating classroom power status
-    ultrasonic = UltrasonicSensor(echo=27, trigger=22)  # Ultrasonic sensor for movement detection
+    ultrasonic_left = UltrasonicSensor(echo=27, trigger=22)  # Ultrasonic sensor for movement detection
+    ultrasonic_right = UltrasonicSensor(echo=5, trigger=6)
 
     while True:
-        distance = ultrasonic.distance * 100  # Convert to cm
-        if distance < detection_range :  # If an object is detected within 100 cm
+        
+        if is_human_present() :  # If an object is detected within 100 cm
             if not USB_Camera_preferred:
-                video_file = record_picamera(ultrasonic, wait_time=10)
+                video_file = record_picamera( wait_time=10)
             else:
-                video_file = record_usb_camera(ultrasonic, wait_time=10)
+                video_file = record_usb_camera( wait_time=10)
 
             # Analyze recorded video
 
@@ -156,7 +164,8 @@ if __name__ == "__main__":
                 processing_thread.start()
 
         sleep(0.5)  # Small delay to prevent busy-waiting
-        if inside_classroom > 0:
-            power.on()  # Turn on power if there are people inside
-        else:
-            power.off()  # Turn off power if no one is inside
+        if processing_thread is not None and not processing_thread.is_alive():
+            if inside_classroom > 0:
+                power.on()  # Turn on power if there are people inside
+            else:
+                power.off()  # Turn off power if no one is inside
