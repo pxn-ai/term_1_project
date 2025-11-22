@@ -15,13 +15,14 @@ detection_range = 20  # in cm
 USB_Camera_preferred = True  # Set to False to use PiCamera instead of USB Camera
 inside_classroom = 0  # Initial count of classroom occupancy
 video_stack = []  # Stack of videos to be analyzed
+frame_width, frame_height = 1280 , 720 # Width of the video frame
 
 def record_picamera( wait_time = 10 ):
     ''' Records a video clip until human movement is detected by Ultrasonic sensor.
         wait_time : duration of the wait in seconds.
     '''
     picam2 = Picamera2()
-    video_config = picam2.create_video_configuration(main={"size": (1280, 720)})
+    video_config = picam2.create_video_configuration(main={"size": (frame_width, frame_height)})
     picam2.configure(video_config)
 
     start_time = time()
@@ -50,7 +51,7 @@ def record_usb_camera( wait_time = 10 ):
     cap = cv2.VideoCapture(0)
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     video_filename = f"video_{int(time())}.avi"
-    out = cv2.VideoWriter(video_filename, fourcc, 20.0, (1280, 720))
+    out = cv2.VideoWriter(video_filename, fourcc, 20.0, (frame_width, frame_height))
 
     start_time = time()
     while True:
@@ -89,10 +90,7 @@ def analyze_video( video_filename , human_counter : HumanInOutCounter ):
     # Analyze video
     net_count_in = human_counter.get_net_entered_count(
         video_path=video_filename,
-        output_path=args.output,
-        show_preview=args.preview,
-        skip_frames=args.skip,
-        count_line_pos=args.line
+        count_line_pos=args.line * frame_width
     )
     
     # Save results if requested
@@ -144,7 +142,7 @@ if __name__ == "__main__":
     human_counter = HumanInOutCounter(model_size=args.model)
 
     power = LED(17)  # LED for indicating classroom power status
-    ultrasonic_left = UltrasonicSensor(echo=27, trigger=22)  # Ultrasonic sensor for movement detection
+    ultrasonic_left = UltrasonicSensor(echo=27, trigger=22)  # Ultrasonic sensors for movement detection
     ultrasonic_right = UltrasonicSensor(echo=5, trigger=6)
 
     while True:
