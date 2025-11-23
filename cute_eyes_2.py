@@ -15,9 +15,9 @@ def show_happy():
     # Expression: ( ^ _ ^ )
     with canvas(device) as draw:
         # Left Eye (^)
-        draw.point((1, 3), fill="white")
-        draw.point((2, 2), fill="white")
-        draw.point((3, 3), fill="white")
+        draw.point((0, 3), fill="white")
+        draw.point((1, 2), fill="white")
+        draw.point((2, 3), fill="white")
         
         # Right Eye (^)
         draw.point((5, 3), fill="white")
@@ -25,7 +25,9 @@ def show_happy():
         draw.point((7, 3), fill="white")
         
         # Mouth (_) - A small line at the bottom
-        draw.line((3, 6, 4, 6), fill="white")
+        draw.line((3, 7, 4, 7), fill="white")
+        draw.point((2, 6), fill="white")
+        draw.point((5, 6), fill="white")
 
 def show_suspicious_left():
     # Expression: ( < _ < )
@@ -42,7 +44,9 @@ def show_suspicious_left():
         draw.point((6, 4), fill="white")
 
         # Mouth (_)
-        draw.line((3, 6, 4, 6), fill="white")
+        draw.line((3, 7, 4, 7), fill="white")
+        draw.point((2, 6), fill="white")
+        draw.point((5, 6), fill="white")
 
 def show_suspicious_right():
     # Expression: ( > _ > )
@@ -59,7 +63,9 @@ def show_suspicious_right():
         draw.point((5, 4), fill="white")
 
         # Mouth (_)
-        draw.line((3, 6, 4, 6), fill="white")
+        draw.line((3, 7, 4, 7), fill="white")
+        draw.point((2, 6), fill="white")
+        draw.point((5, 6), fill="white")
 
 def clear_face():
     with canvas(device) as draw:
