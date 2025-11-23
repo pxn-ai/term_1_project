@@ -171,7 +171,7 @@ class HumanInOutCounter:
         self.exited = 0
         
         # Confidence threshold
-        self.confidence_threshold = 0.5  # Increased for fewer false positives
+        self.confidence_threshold = 0.3  # Lowered to detect more people
         
     def get_net_entered_count_multicore(self, video_path, count_line_pos=0.5, num_workers=3):
         """
@@ -189,6 +189,7 @@ class HumanInOutCounter:
         print(f"MULTICORE VIDEO ANALYSIS ({num_workers} workers)")
         print(f"{'='*70}")
         print(f"Video: {video_path}")
+        print(f"Counting Line Position: {count_line_pos:.1f}")
         
         # Get video info
         cap = cv2.VideoCapture(video_path)
@@ -295,21 +296,48 @@ class HumanInOutCounter:
         
         # Calculate net change
         net_change = 0
+        print("\nTrack Analysis:")
         for track_id, positions in all_movements.items():
             if len(positions) < 2:
                 continue
             
             start_x = positions[0]
             end_x = positions[-1]
+            min_x = min(positions)
+            max_x = max(positions)
             
-            # Person moved left to right AND crossed the line
-            if start_x < count_line_pos < end_x:
+            print(f"  Track {track_id}: Start={start_x:.0f}, End={end_x:.0f}, Min={min_x:.0f}, Max={max_x:.0f}, Points={len(positions)}")
+            
+            # Check for crossing events (more robust than just start/end)
+            crossed_in = False
+            crossed_out = False
+            
+            # Method 1: Direct start/end check (good for complete tracks)
+            if start_x < count_line_pos and end_x > count_line_pos:
+                crossed_in = True
+            elif start_x > count_line_pos and end_x < count_line_pos:
+                crossed_out = True
+                
+            # Method 2: Check if track covers the line with significant movement
+            # This helps if the track starts/ends slightly off but clearly crossed
+            if not (crossed_in or crossed_out):
+                if min_x < count_line_pos and max_x > count_line_pos:
+                    # It crossed, but determine direction based on start/end
+                    if start_x < end_x:
+                        crossed_in = True
+                        print(f"    -> Detected crossing IN (based on min/max)")
+                    else:
+                        crossed_out = True
+                        print(f"    -> Detected crossing OUT (based on min/max)")
+
+            if crossed_in:
                 net_change += 1
-                print(f"Track {track_id}: ENTERED (moved {start_x:.0f} → {end_x:.0f})")
-            # Person moved right to left AND crossed the line
-            elif start_x > count_line_pos > end_x:
+                print(f"    -> COUNTED: ENTERED")
+            elif crossed_out:
                 net_change -= 1
-                print(f"Track {track_id}: EXITED (moved {start_x:.0f} → {end_x:.0f})")
+                print(f"    -> COUNTED: EXITED")
+            else:
+                print(f"    -> Ignored (Did not cross line at {count_line_pos:.0f})")
         
         print(f"\nNet change: {net_change:+d}")
         return net_change
