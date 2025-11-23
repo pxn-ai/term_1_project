@@ -40,7 +40,7 @@ def record_picamera(wait_time=10):
     start_time = time()
     print("Movement detected! Recording video...")
     video_filename = f"video_{int(time())}.h264"
-    picam2.start_recording(video_filename)
+    picam2.start_recording("H264" ,video_filename)
 
     while True:
         time_remaining = wait_time - (time() - start_time)

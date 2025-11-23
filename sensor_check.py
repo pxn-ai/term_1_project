@@ -26,7 +26,7 @@ if __name__ == "__main__":
     ultrasonic_right = DistanceSensor(echo=5, trigger=6, pin_factory=factory)
 
     # Initialize LEDs
-    led = LED(17)
+    led = LED(17, pin_factory=factory)
 
     try:
         while True:
