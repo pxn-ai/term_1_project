@@ -16,7 +16,7 @@ except ImportError:
 from gpiozero import LED, DistanceSensor
 from Human_Identifier import HumanInOutCounter  # Imports the Custom Model we built
 
-detection_range = 20  # in cm
+detection_range = 90  # in cm
 USB_Camera_preferred = True  # Set to False to use PiCamera instead of USB Camera
 inside_classroom = 0  # Initial count of classroom occupancy
 video_stack = []  # Stack of videos to be analyzed
