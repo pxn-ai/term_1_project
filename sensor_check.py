@@ -3,8 +3,12 @@ Check the both Ultrasonic sensors and LEDs.
 '''
 
 from gpiozero import DistanceSensor, LED
+from gpiozero.pins.pigpio import PiGPIOFactory
 from time import sleep
 from Main import is_human_present
+
+# Set the pin factory to use pigpio for better accuracy
+factory = PiGPIOFactory()
 
 def LED_check(led):
     led.on()
@@ -18,8 +22,8 @@ def ultrasonic_check(sensor):
 
 if __name__ == "__main__":
     # Initialize Ultrasonic Sensors
-    ultrasonic_left = DistanceSensor(echo=27, trigger=22)
-    ultrasonic_right = DistanceSensor(echo=5, trigger=6)
+    ultrasonic_left = DistanceSensor(echo=27, trigger=22, pin_factory=factory)
+    ultrasonic_right = DistanceSensor(echo=5, trigger=6, pin_factory=factory)
 
     # Initialize LEDs
     led = LED(17)
