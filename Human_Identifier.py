@@ -1,7 +1,6 @@
 """
-Video Human In/Out Counter for Raspberry Pi
-Analyzes video clips to count people entering and exiting
-Uses tracking to follow individuals across frames
+OPTIMIZED Video Human In/Out Counter for Raspberry Pi 4
+Uses multiprocessing to leverage all 4 cores for maximum speed
 """
 
 import cv2
@@ -9,8 +8,8 @@ import numpy as np
 from collections import defaultdict
 import json
 from datetime import datetime
-from multiprocessing import Pool, cpu_count, Manager
-import queue
+import multiprocessing as mp
+from functools import partial
 
 try:
     from ultralytics import YOLO
@@ -21,6 +20,98 @@ except ImportError:
     from ultralytics import YOLO
 
 
+def process_video_segment(segment_info, model_path, conf_threshold):
+    """
+    Process a segment of video frames in a separate process
+    Returns movements dictionary for this segment
+    """
+    video_path, start_frame, end_frame, segment_id = segment_info
+    
+    # Load model in this process
+    model = YOLO(model_path)
+    
+    movements = defaultdict(list)
+    cap = cv2.VideoCapture(video_path)
+    
+    if not cap.isOpened():
+        return {}
+    
+    # Jump to start frame
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+    
+    frame_count = start_frame
+    frames_batch = []
+    batch_size = 4  # Process 4 frames at once
+    
+    print(f"[Worker {segment_id}] Processing frames {start_frame}-{end_frame}")
+    
+    while frame_count < end_frame:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        frame_count += 1
+        
+        # Skip frames (process every 3rd frame)
+        if frame_count % 3 != 0:
+            continue
+        
+        # Resize for faster processing
+        frame_resized = cv2.resize(frame, (640, 360))
+        frames_batch.append(frame_resized)
+        
+        # Process batch when full
+        if len(frames_batch) >= batch_size:
+            results = model.track(
+                frames_batch,
+                conf=conf_threshold,
+                classes=[0],
+                persist=True,
+                verbose=False,
+                tracker="bytetrack.yaml"
+            )
+            
+            # Extract positions from batch results
+            for result in results:
+                if result.boxes.id is not None:
+                    boxes = result.boxes.xyxy.cpu().numpy()
+                    track_ids = result.boxes.id.cpu().numpy().astype(int)
+                    
+                    for box, track_id in zip(boxes, track_ids):
+                        center_x = (box[0] + box[2]) / 2.0
+                        # Add segment offset to track_id to avoid conflicts
+                        unique_track_id = track_id + (segment_id * 1000)
+                        movements[unique_track_id].append(center_x)
+            
+            frames_batch = []
+    
+    # Process remaining frames
+    if frames_batch:
+        results = model.track(
+            frames_batch,
+            conf=conf_threshold,
+            classes=[0],
+            persist=True,
+            verbose=False,
+            tracker="bytetrack.yaml"
+        )
+        
+        for result in results:
+            if result.boxes.id is not None:
+                boxes = result.boxes.xyxy.cpu().numpy()
+                track_ids = result.boxes.id.cpu().numpy().astype(int)
+                
+                for box, track_id in zip(boxes, track_ids):
+                    center_x = (box[0] + box[2]) / 2.0
+                    unique_track_id = track_id + (segment_id * 1000)
+                    movements[unique_track_id].append(center_x)
+    
+    cap.release()
+    
+    print(f"[Worker {segment_id}] Completed: {len(movements)} tracks found")
+    return dict(movements)
+
+
 class HumanInOutCounter:
     def __init__(self, model_size='n'):
         """
@@ -29,19 +120,15 @@ class HumanInOutCounter:
         """
         print(f"Loading YOLOv8{model_size} model with tracking...")
         self.model = YOLO(f'yolov8{model_size}.pt')
-        
-        # Enable INT8 quantization for Raspberry Pi (faster inference)
-        self.model.overrides['half'] = False  # Full precision on CPU
-        self.model.overrides['device'] = 'cpu'
-        
+        self.model_path = f'yolov8{model_size}.pt'
         print("✓ Model loaded\n")
         
         # Tracking settings
         self.track_history = defaultdict(lambda: [])
         self.counted_ids = set()
         
-        # Line position (percentage from top: 0.0 to 1.0)
-        self.line_position = 0.5  # Middle of frame
+        # Line position
+        self.line_position = 0.5
         
         # Direction tracking
         self.direction_history = defaultdict(lambda: [])
@@ -51,420 +138,184 @@ class HumanInOutCounter:
         self.exited = 0
         
         # Confidence threshold
-        self.confidence_threshold = 0.4
+        self.confidence_threshold = 0.5  # Increased for fewer false positives
         
-    def set_counting_line(self, position=0.5):
+    def get_net_entered_count_multicore(self, video_path, count_line_pos=0.5, num_workers=3):
         """
-        Set the virtual line position for counting
-        position: 0.0 (left) to 1.0 (right), default 0.5 (middle)
-        """
-        self.line_position = max(0.1, min(0.9, position))
-        print(f"Counting line set at {self.line_position*100:.0f}% from left")
-    
-    def analyze_video(self, video_path, output_path=None, show_preview=False, 
-                     skip_frames=3, count_line_pos=0.5):
-        """
-        Analyze video and count humans entering/exiting
-        Optimized version with better performance
-        """
+        OPTIMIZED: Use multiprocessing to analyze video on multiple cores
         
-        # Reset counters
-        self.track_history.clear()
-        self.direction_history.clear()
-        self.counted_ids.clear()
-        self.entered = 0
-        self.exited = 0
-        self.set_counting_line(count_line_pos)
+        Args:
+            video_path: Path to video file
+            count_line_pos: Position of counting line (pixels from left)
+            num_workers: Number of parallel workers (default: 3, leave 1 core free)
         
-        print("="*70)
-        print("VIDEO ANALYSIS - HUMAN IN/OUT COUNTER (OPTIMIZED)")
-        print("="*70)
+        Returns:
+            int: Net count of people entered (positive) or exited (negative)
+        """
+        print(f"\n{'='*70}")
+        print(f"MULTICORE VIDEO ANALYSIS ({num_workers} workers)")
+        print(f"{'='*70}")
         print(f"Video: {video_path}")
-        print(f"Counting line position: {self.line_position*100:.0f}% from left")
-        print(f"Frame skip: {skip_frames}")
-        print("="*70 + "\n")
         
+        # Get video info
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print("Error: Could not open video")
+            return 0
+        
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        cap.release()
+        
+        print(f"Total frames: {total_frames}")
+        print(f"FPS: {fps}")
+        print(f"Workers: {num_workers}")
+        print(f"{'='*70}\n")
+        
+        # Split video into segments for parallel processing
+        frames_per_segment = total_frames // num_workers
+        segments = []
+        
+        for i in range(num_workers):
+            start_frame = i * frames_per_segment
+            end_frame = (i + 1) * frames_per_segment if i < num_workers - 1 else total_frames
+            segments.append((video_path, start_frame, end_frame, i))
+        
+        # Process segments in parallel
+        start_time = datetime.now()
+        
+        with mp.Pool(processes=num_workers) as pool:
+            process_func = partial(
+                process_video_segment,
+                model_path=self.model_path,
+                conf_threshold=self.confidence_threshold
+            )
+            segment_results = pool.map(process_func, segments)
+        
+        # Merge results from all segments
+        all_movements = {}
+        for segment_movements in segment_results:
+            all_movements.update(segment_movements)
+        
+        processing_time = (datetime.now() - start_time).total_seconds()
+        
+        print(f"\n{'='*70}")
+        print(f"Processing completed in {processing_time:.1f} seconds")
+        print(f"Total tracks found: {len(all_movements)}")
+        print(f"{'='*70}\n")
+        
+        # Calculate net change
+        net_change = 0
+        for track_id, positions in all_movements.items():
+            if len(positions) < 2:
+                continue
+            
+            start_x = positions[0]
+            end_x = positions[-1]
+            
+            # Person moved left to right AND crossed the line
+            if start_x < count_line_pos < end_x:
+                net_change += 1
+                print(f"Track {track_id}: ENTERED (moved {start_x:.0f} → {end_x:.0f})")
+            # Person moved right to left AND crossed the line
+            elif start_x > count_line_pos > end_x:
+                net_change -= 1
+                print(f"Track {track_id}: EXITED (moved {start_x:.0f} → {end_x:.0f})")
+        
+        print(f"\nNet change: {net_change:+d}")
+        return net_change
+    
+    def get_net_entered_count(self, video_path, count_line_pos=0.5):
+        """
+        OPTIMIZED: Single-threaded version with all optimizations
+        (fallback if multiprocessing not available)
+        """
+        movements = defaultdict(list)
         cap = cv2.VideoCapture(video_path)
         
         if not cap.isOpened():
-            print(f"Error: Could not open video {video_path}")
-            return None
-        
-        # Get video properties
-        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = int(cap.get(cv2.CAP_PROP_FPS))
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        
-        # Reduce processing resolution
-        target_width = 640
-        scale_factor = target_width / frame_width
-        target_height = int(frame_height * scale_factor)
-        
-        print(f"Original resolution: {frame_width}x{frame_height}")
-        print(f"Processing resolution: {target_width}x{target_height}")
-        print(f"FPS: {fps}")
-        print(f"Total frames: {total_frames}")
-        print(f"Duration: {total_frames/fps:.1f} seconds\n")
-        
-        # Calculate counting line X position
-        line_x = int(target_width * self.line_position)
-        
-        # Setup video writer if output path specified
-        out = None
-        if output_path:
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(output_path, fourcc, fps//skip_frames, (target_width, target_height))
-            print(f"Output will be saved to: {output_path}\n")
+            return 0
         
         frame_count = 0
-        processed_frames = 0
-        
-        print("Processing video...")
-        start_time = datetime.now()
+        frames_batch = []
+        batch_size = 4
         
         while True:
             ret, frame = cap.read()
             if not ret:
+                # Process remaining frames
+                if frames_batch:
+                    self._process_batch(frames_batch, movements)
                 break
             
             frame_count += 1
             
-            # Skip frames for performance
-            if frame_count % skip_frames != 0:
+            # Skip frames (process every 3rd frame)
+            if frame_count % 3 != 0:
                 continue
             
-            processed_frames += 1
-            
             # Resize for faster processing
-            frame = cv2.resize(frame, (target_width, target_height))
+            frame_resized = cv2.resize(frame, (640, 360))
+            frames_batch.append(frame_resized)
             
-            # Run tracking
-            results = self.model.track(
-                frame,
-                conf=self.confidence_threshold,
-                classes=[0],  # Only persons
-                persist=True,
-                verbose=False,
-                tracker="bytetrack.yaml",
-                imgsz=target_width
-            )
-            
-            # Process detections
-            if results[0].boxes.id is not None:
-                boxes = results[0].boxes.xyxy.cpu().numpy()
-                track_ids = results[0].boxes.id.cpu().numpy().astype(int)
-                confidences = results[0].boxes.conf.cpu().numpy()
-                
-                for box, track_id, conf in zip(boxes, track_ids, confidences):
-                    x1, y1, x2, y2 = map(int, box)
-                    
-                    # Calculate center point of bounding box
-                    center_x = (x1 + x2) // 2
-                    center_y = (y1 + y2) // 2
-                    
-                    # Store track history
-                    self.track_history[track_id].append((center_x, center_y))
-                    
-                    # Keep only last 20 positions
-                    if len(self.track_history[track_id]) > 20:
-                        self.track_history[track_id].pop(0)
-                    
-                    # Check if crossed line (only count once per ID)
-                    if track_id not in self.counted_ids and len(self.track_history[track_id]) >= 2:
-                        prev_x = self.track_history[track_id][-2][0]
-                        curr_x = center_x
-                        
-                        # Crossed line going right (ENTERED)
-                        if prev_x < line_x <= curr_x:
-                            self.entered += 1
-                            self.counted_ids.add(track_id)
-                            self.direction_history[track_id] = "IN"
-                            print(f"Frame {frame_count}: Person {track_id} ENTERED")
-                        
-                        # Crossed line going left (EXITED)
-                        elif prev_x > line_x >= curr_x:
-                            self.exited += 1
-                            self.counted_ids.add(track_id)
-                            self.direction_history[track_id] = "OUT"
-                            print(f"Frame {frame_count}: Person {track_id} EXITED")
-                    
-                    # Draw on frame (only if output or preview requested)
-                    if output_path or show_preview:
-                        # Color based on direction
-                        if track_id in self.direction_history:
-                            if self.direction_history[track_id] == "IN":
-                                color = (0, 255, 0)  # Green for entered
-                                status = "IN"
-                            else:
-                                color = (0, 0, 255)  # Red for exited
-                                status = "OUT"
-                        else:
-                            color = (255, 0, 0)  # Blue for tracking
-                            status = "TRACKING"
-                        
-                        # Draw bounding box
-                        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                        
-                        # Draw label
-                        label = f"ID:{track_id} {status}"
-                        cv2.putText(frame, label, (x1, y1 - 10),
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-                        
-                        # Draw tracking trail
-                        points = np.array(self.track_history[track_id], dtype=np.int32)
-                        if len(points) > 1:
-                            cv2.polylines(frame, [points], False, color, 2)
-            
-            # Draw annotations only if needed
-            if output_path or show_preview:
-                # Draw counting line
-                cv2.line(frame, (line_x, 0), (line_x, target_height), (255, 255, 0), 3)
-                cv2.putText(frame, "COUNTING LINE", (line_x + 10, 30),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
-                
-                # Draw statistics overlay
-                overlay = frame.copy()
-                cv2.rectangle(overlay, (10, 10), (300, 130), (0, 0, 0), -1)
-                cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
-                
-                cv2.putText(frame, f"ENTERED: {self.entered}", (20, 40),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-                cv2.putText(frame, f"EXITED: {self.exited}", (20, 75),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-                cv2.putText(frame, f"INSIDE: {self.entered - self.exited}", (20, 110),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-                
-                # Progress indicator
-                progress = (frame_count / total_frames) * 100
-                cv2.putText(frame, f"Progress: {progress:.1f}%", 
-                           (target_width - 200, 30),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                
-                # Write frame to output video
-                if out:
-                    out.write(frame)
-                
-                # Show preview if requested
-                if show_preview:
-                    cv2.imshow('Human In/Out Counter', frame)
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        print("\nStopped by user")
-                        break
-            
-            # Progress update every 30 processed frames
-            if processed_frames % 30 == 0:
-                elapsed = (datetime.now() - start_time).total_seconds()
-                fps_processing = processed_frames / elapsed if elapsed > 0 else 0
-                progress = (frame_count / total_frames) * 100
-                print(f"Progress: {progress:.1f}% | Processing FPS: {fps_processing:.1f}")
+            # Process batch when full
+            if len(frames_batch) >= batch_size:
+                self._process_batch(frames_batch, movements)
+                frames_batch = []
         
-        # Cleanup
         cap.release()
-        if out:
-            out.release()
-        if show_preview:
-            cv2.destroyAllWindows()
         
-        # Final statistics
-        processing_time = (datetime.now() - start_time).total_seconds()
+        # Calculate net change
+        net_change = 0
+        for positions in movements.values():
+            if len(positions) < 2:
+                continue
+            if positions[0] < count_line_pos < positions[-1]:
+                net_change += 1
+            elif positions[0] > count_line_pos > positions[-1]:
+                net_change -= 1
         
-        print("\n" + "="*70)
-        print("ANALYSIS COMPLETE")
-        print("="*70)
-        print(f"Total frames processed: {processed_frames} / {total_frames}")
-        print(f"Processing time: {processing_time:.1f} seconds")
-        print(f"Average processing FPS: {processed_frames/processing_time:.1f}")
-        print("\nRESULTS:")
-        print(f"  People ENTERED: {self.entered}")
-        print(f"  People EXITED: {self.exited}")
-        print(f"  Net change (IN - OUT): {self.entered - self.exited}")
-        print(f"  Total unique people tracked: {len(self.counted_ids)}")
-        print("="*70 + "\n")
+        return net_change
+    
+    def _process_batch(self, frames, movements):
+        """Process a batch of frames"""
+        results = self.model.track(
+            frames,
+            conf=self.confidence_threshold,
+            classes=[0],
+            persist=True,
+            verbose=False,
+            tracker="bytetrack.yaml"
+        )
         
-        # Return results as dictionary
+        for result in results:
+            if result.boxes.id is not None:
+                boxes = result.boxes.xyxy.cpu().numpy()
+                track_ids = result.boxes.id.cpu().numpy().astype(int)
+                
+                for box, track_id in zip(boxes, track_ids):
+                    center_x = (box[0] + box[2]) / 2.0
+                    movements[track_id].append(center_x)
+    
+    def save_results(self, net_count, output_file='results.json'):
+        """Save analysis results to JSON file"""
         results = {
-            'video_path': video_path,
-            'entered': self.entered,
-            'exited': self.exited,
-            'net_change': self.entered - self.exited,
-            'total_tracked': len(self.counted_ids),
-            'processing_time': processing_time,
-            'total_frames': total_frames,
-            'processed_frames': processed_frames,
+            'net_change': net_count,
             'timestamp': datetime.now().isoformat()
         }
-        
-        return results
-    
-    def save_results(self, results, output_file='results.json'):
-        """Save analysis results to JSON file"""
         with open(output_file, 'w') as f:
             json.dump(results, f, indent=4)
         print(f"Results saved to {output_file}")
     
+    # Keep old methods for backwards compatibility
     def get_human_movements(self, video_file_path: str) -> dict:
-        """
-        Analyzes video file and extracts human movement data
-        
-        Args:
-            video_file_path (str): Path to the video file
-        
-        Returns:
-            dict: Dictionary where:
-                  - key: track_id (int)
-                  - value: list of x_positions (center x coordinate) for each frame
-                  
-        Example output:
-            {
-                1: [320.5, 325.0, 330.2, 335.8, ...],  # Person 1's x positions
-                2: [640.1, 638.5, 635.0, 632.3, ...],  # Person 2's x positions
-                3: [150.0, 155.5, 160.2, ...]          # Person 3's x positions
-            }
-        """
-        
-        # Initialize tracking dictionary
+        """Legacy method - kept for compatibility"""
+        return self._extract_movements_simple(video_file_path)
+    
+    def _extract_movements_simple(self, video_path):
+        """Simplified movement extraction"""
         movements = defaultdict(list)
-        
-        # Open video
-        cap = cv2.VideoCapture(video_file_path)
-        
-        if not cap.isOpened():
-            print(f"Error: Could not open video {video_file_path}")
-            return {}
-        
-        # Get video properties
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = int(cap.get(cv2.CAP_PROP_FPS))
-        
-        print(f"Processing video: {video_file_path}")
-        print(f"Total frames: {total_frames}")
-        print(f"FPS: {fps}")
-        print("Analyzing human movements...\n")
-        
-        frame_count = 0
-        
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            
-            frame_count += 1
-            
-            # Run tracking on frame
-            results = self.model.track(
-                frame,
-                conf=0.4,           # Confidence threshold
-                classes=[0],        # Only detect persons (class 0)
-                persist=True,       # Keep track IDs consistent
-                verbose=False,      # Suppress output
-                tracker="bytetrack.yaml"
-            )
-            
-            # Extract tracking information
-            if results[0].boxes.id is not None:
-                boxes = results[0].boxes.xyxy.cpu().numpy()
-                track_ids = results[0].boxes.id.cpu().numpy().astype(int)
-                
-                for box, track_id in zip(boxes, track_ids):
-                    x1, y1, x2, y2 = box
-                    
-                    # Calculate center x position
-                    center_x = (x1 + x2) / 2.0
-                    
-                    # Store x position for this track_id
-                    movements[track_id].append(center_x)
-            
-            # Progress indicator
-            if frame_count % 100 == 0:
-                progress = (frame_count / total_frames) * 100
-                print(f"Progress: {progress:.1f}% ({frame_count}/{total_frames})")
-        
-        # Cleanup
-        cap.release()
-        
-        # Convert defaultdict to regular dict
-        movements = dict(movements)
-        
-        print(f"\nAnalysis complete!")
-        print(f"Total unique people tracked: {len(movements)}")
-        for track_id, positions in movements.items():
-            print(f"  Track ID {track_id}: {len(positions)} position samples")
-        
-        return movements
-
-    def get_human_movements_with_y(self, video_file_path: str) -> dict:
-        """
-        Extended version that returns both x and y positions
-        
-        Returns:
-            dict: {
-                track_id: {
-                    'x': [x1, x2, x3, ...],
-                    'y': [y1, y2, y3, ...]
-                }
-            }
-        """
-        movements = defaultdict(lambda: {'x': [], 'y': []})
-        
-        cap = cv2.VideoCapture(video_file_path)
-        
-        if not cap.isOpened():
-            return {}
-        
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            
-            results = self.model.track(
-                frame,
-                conf=0.4,
-                classes=[0],
-                persist=True,
-                verbose=False,
-                tracker="bytetrack.yaml"
-            )
-            
-            if results[0].boxes.id is not None:
-                boxes = results[0].boxes.xyxy.cpu().numpy()
-                track_ids = results[0].boxes.id.cpu().numpy().astype(int)
-                
-                for box, track_id in zip(boxes, track_ids):
-                    x1, y1, x2, y2 = box
-                    center_x = (x1 + x2) / 2.0
-                    center_y = (y1 + y2) / 2.0
-                    
-                    movements[track_id]['x'].append(center_x)
-                    movements[track_id]['y'].append(center_y)
-        
-        cap.release()
-        return dict(movements)
-
-    def get_human_movements_detailed(self, video_file_path: str) -> dict:
-        """
-        Detailed version with complete bounding box and metadata
-        
-        Returns:
-            dict: {
-                track_id: {
-                    'frames': [frame_numbers],
-                    'x': [center_x positions],
-                    'y': [center_y positions],
-                    'bbox': [(x1, y1, x2, y2), ...],
-                    'confidence': [conf1, conf2, ...]
-                }
-            }
-        """
-        movements = defaultdict(lambda: {
-            'frames': [],
-            'x': [],
-            'y': [],
-            'bbox': [],
-            'confidence': []
-        })
-        
-        cap = cv2.VideoCapture(video_file_path)
+        cap = cv2.VideoCapture(video_path)
         
         if not cap.isOpened():
             return {}
@@ -478,80 +329,30 @@ class HumanInOutCounter:
             
             frame_count += 1
             
-            results = self.model.track(
-                frame,
-                conf=0.4,
-                classes=[0],
-                persist=True,
-                verbose=False,
-                tracker="bytetrack.yaml"
-            )
-            
-            if results[0].boxes.id is not None:
-                boxes = results[0].boxes.xyxy.cpu().numpy()
-                track_ids = results[0].boxes.id.cpu().numpy().astype(int)
-                confidences = results[0].boxes.conf.cpu().numpy()
-                
-                for box, track_id, conf in zip(boxes, track_ids, confidences):
-                    x1, y1, x2, y2 = box
-                    center_x = (x1 + x2) / 2.0
-                    center_y = (y1 + y2) / 2.0
-                    
-                    movements[track_id]['frames'].append(frame_count)
-                    movements[track_id]['x'].append(center_x)
-                    movements[track_id]['y'].append(center_y)
-                    movements[track_id]['bbox'].append((float(x1), float(y1), float(x2), float(y2)))
-                    movements[track_id]['confidence'].append(float(conf))
-        
-        cap.release()
-        return dict(movements)
-
-    def analyze_movement_statistics(self, movements: dict) -> dict:
-        """
-        Calculate statistics from movement data
-        
-        Args:
-            movements: Output from get_human_movements()
-        
-        Returns:
-            dict: Statistics for each track_id
-        """
-        stats = {}
-        
-        for track_id, x_positions in movements.items():
-            if len(x_positions) < 2:
+            if frame_count % 3 != 0:
                 continue
             
-            x_array = np.array(x_positions)
+            frame = cv2.resize(frame, (640, 360))
             
-            stats[track_id] = {
-                'total_frames': len(x_positions),
-                'start_x': x_positions[0],
-                'end_x': x_positions[-1],
-                'min_x': float(np.min(x_array)),
-                'max_x': float(np.max(x_array)),
-                'mean_x': float(np.mean(x_array)),
-                'total_displacement': float(x_positions[-1] - x_positions[0]),
-                'total_distance': float(np.sum(np.abs(np.diff(x_array)))),
-                'direction': 'left-to-right' if x_positions[-1] > x_positions[0] else 'right-to-left'
-            }
+            results = self.model.track(
+                frame,
+                conf=0.5,
+                classes=[0],
+                persist=True,
+                verbose=False,
+                tracker="bytetrack.yaml"
+            )
+            
+            if results[0].boxes.id is not None:
+                boxes = results[0].boxes.xyxy.cpu().numpy()
+                track_ids = results[0].boxes.id.cpu().numpy().astype(int)
+                
+                for box, track_id in zip(boxes, track_ids):
+                    center_x = (box[0] + box[2]) / 2.0
+                    movements[track_id].append(center_x)
         
-        return stats
-    
-    def get_net_entered_count(self, video_path, count_line_pos= 0.5 ) :
-        """Return current counting results as integer ( net change ) """
-        results = self.get_human_movements(video_path)
-        if results is None:
-            return 0
-        
-        net_change = 0
-        for positions in results.values():
-            if positions[0] < positions[-1] and positions[-1] > count_line_pos :
-                net_change += 1
-            elif positions[0] > positions[-1] and positions[-1] < count_line_pos :
-                net_change -= 1
-
-        return net_change
+        cap.release()
+        return dict(movements)
 
 
 # Main execution
@@ -559,18 +360,17 @@ if __name__ == "__main__":
     import sys
     import argparse
     
+    # Required for multiprocessing on some systems
+    mp.set_start_method('spawn', force=True)
+    
     parser = argparse.ArgumentParser(description='Video Human In/Out Counter')
     parser.add_argument('video', type=str, help='Path to video file')
-    parser.add_argument('--output', type=str, default=None,
-                       help='Path to save annotated video (optional)')
-    parser.add_argument('--preview', action='store_true',
-                       help='Show video preview while processing')
     parser.add_argument('--model', type=str, default='n',
                        help='Model size: n (nano), s (small)')
-    parser.add_argument('--skip', type=int, default=2,
-                       help='Process every Nth frame (default: 2)')
     parser.add_argument('--line', type=float, default=0.5,
                        help='Counting line position 0.0-1.0 from left (default: 0.5 = middle)')
+    parser.add_argument('--workers', type=int, default=3,
+                       help='Number of worker processes (default: 3)')
     parser.add_argument('--json', type=str, default=None,
                        help='Save results to JSON file')
     
@@ -579,15 +379,20 @@ if __name__ == "__main__":
     # Create counter
     counter = HumanInOutCounter(model_size=args.model)
     
-    # Analyze video
-    results = counter.analyze_video(
+    # Get video dimensions for line position
+    cap = cv2.VideoCapture(args.video)
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    cap.release()
+    
+    # Analyze video with multiprocessing
+    net_count = counter.get_net_entered_count_multicore(
         video_path=args.video,
-        output_path=args.output,
-        show_preview=args.preview,
-        skip_frames=args.skip,
-        count_line_pos=args.line
+        count_line_pos=args.line * frame_width,
+        num_workers=args.workers
     )
     
+    print(f"\nFinal Result: {net_count:+d} people")
+    
     # Save results if requested
-    if args.json and results:
-        counter.save_results(results, args.json)
+    if args.json:
+        counter.save_results(net_count, args.json)

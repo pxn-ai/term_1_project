@@ -1,4 +1,5 @@
 '''
+Optimized version with multiprocessing support
 When detected a movement through the Ultrasonic sensor, a video clip recorded and saved.
 Then starts analyzing it and gets count of people went in and out of the classroom.
 '''
@@ -20,9 +21,11 @@ detection_range = 90  # in cm
 USB_Camera_preferred = True  # Set to False to use PiCamera instead of USB Camera
 inside_classroom = 0  # Initial count of classroom occupancy
 video_stack = []  # Stack of videos to be analyzed
-frame_width, frame_height = 1280 , 720 # Width of the video frame
 
-def record_picamera( wait_time = 10 ):
+# OPTIMIZED: Lower resolution for faster processing (4x fewer pixels)
+frame_width, frame_height = 640, 360  # Changed from 1280x720
+
+def record_picamera(wait_time=10):
     ''' Records a video clip until human movement is detected by Ultrasonic sensor.
         wait_time : duration of the wait in seconds.
     '''
@@ -35,7 +38,6 @@ def record_picamera( wait_time = 10 ):
     picam2.configure(video_config)
 
     start_time = time()
-    # Removed redundant outer while True loop
     print("Movement detected! Recording video...")
     video_filename = f"video_{int(time())}.h264"
     picam2.start_recording(video_filename)
@@ -43,28 +45,35 @@ def record_picamera( wait_time = 10 ):
     while True:
         time_remaining = wait_time - (time() - start_time)
 
-        if is_human_present() :  # If an object is detected within 100 cm
+        if is_human_present():  # If an object is detected within range
             if time_remaining <= wait_time:
                 time_remaining = wait_time  # Reset the timer if movement is detected
         if time_remaining <= 0:
             break
-        sleep(0.1) # Small delay to prevent busy-waiting
+        sleep(0.1)
     picam2.stop_recording()
     print(f"Video saved as {video_filename}")
     return video_filename
         
-def record_usb_camera( wait_time = 10 ):
+def record_usb_camera(wait_time=10):
     ''' Records a video clip until human movement is detected by Ultrasonic sensor.
         wait_time : duration of the wait in seconds.
     '''
     cap = cv2.VideoCapture(0)
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    video_filename = f"video_{int(time())}.avi"
+    
+    # Set resolution at capture time
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, frame_width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, frame_height)
+    cap.set(cv2.CAP_PROP_FPS, 20)  # Lower FPS for smaller files
+    
+    # OPTIMIZED: Use H.264 codec (better compression, faster processing)
+    fourcc = cv2.VideoWriter_fourcc(*'H264')  # Changed from XVID
+    video_filename = f"video_{int(time())}.mp4"  # Changed from .avi
     out = cv2.VideoWriter(video_filename, fourcc, 20.0, (frame_width, frame_height))
 
     start_time = time()
-    # Removed redundant outer while True loop
     print("Movement detected! Recording video...")
+    
     while True:
         ret, frame = cap.read()
         if ret:
@@ -72,18 +81,19 @@ def record_usb_camera( wait_time = 10 ):
 
         time_remaining = wait_time - (time() - start_time)
         
-        if is_human_present() :  # If an object is detected within 100 cm
+        if is_human_present():  # If an object is detected within range
             if time_remaining <= wait_time:
                 time_remaining = wait_time  # Reset the timer if movement is detected
         if time_remaining <= 0:
             break
-        sleep(0.1) # Small delay to prevent busy-waiting
+        sleep(0.05)  # Slightly faster polling
+    
     out.release()
     cap.release()
     print(f"Video saved as {video_filename}")
     return video_filename
     
-def is_human_present(left_sensor=None, right_sensor=None) :
+def is_human_present(left_sensor=None, right_sensor=None):
     ''' Checks if a human is present using the Ultrasonic sensors. '''
     global ultrasonic_left, ultrasonic_right, detection_range
     
@@ -94,25 +104,27 @@ def is_human_present(left_sensor=None, right_sensor=None) :
     distance_right = sensor_r.distance * 100  # Convert to cm
     return distance_left < detection_range or distance_right < detection_range
 
-def analyze_video( video_filename , human_counter : HumanInOutCounter, args ):
+def analyze_video(video_filename, human_counter: HumanInOutCounter, args):
     ''' Analyzes the recorded video and returns count of people went in and out of the classroom.
         video_filename : path to the recorded video file.
     '''
     
     print(f"Analyzing video {video_filename}...")
-    # Analyze video
-    net_count_in = human_counter.get_net_entered_count(
+    
+    # OPTIMIZED: Use multiprocessing version
+    net_count_in = human_counter.get_net_entered_count_multicore(
         video_path=video_filename,
-        count_line_pos=args.line * frame_width
+        count_line_pos=args.line * frame_width,
+        num_workers=3  # Use 3 cores (leave 1 for system)
     )
     
     # Save results if requested
-    if args.json and net_count_in :
+    if args.json and net_count_in:
         human_counter.save_results(net_count_in, args.json)
 
     return net_count_in
 
-def process_video_stack( human_counter, args ):
+def process_video_stack(human_counter, args):
     ''' Processes videos in the stack one by one. '''
     global inside_classroom
     
@@ -136,7 +148,6 @@ if __name__ == "__main__":
     processing_thread = None
 
     parser = argparse.ArgumentParser(description='Video Human In/Out Counter')
-    # Made video argument optional (nargs='?') so script runs without it
     parser.add_argument('video', type=str, nargs='?', help='Path to video file (optional for live mode)')
     parser.add_argument('--output', type=str, default=None,
                        help='Path to save annotated video (optional)')
@@ -144,16 +155,18 @@ if __name__ == "__main__":
                        help='Show video preview while processing')
     parser.add_argument('--model', type=str, default='n',
                        help='Model size: n (nano), s (small)')
-    parser.add_argument('--skip', type=int, default=1,
-                       help='Process every Nth frame (default: 2)')
+    parser.add_argument('--skip', type=int, default=3,
+                       help='Process every Nth frame (default: 3)')
     parser.add_argument('--line', type=float, default=0.5,
                        help='Counting line position 0.0-1.0 from left (default: 0.5 = middle)')
     parser.add_argument('--json', type=str, default=None,
                        help='Save results to JSON file')
+    parser.add_argument('--workers', type=int, default=3,
+                       help='Number of worker processes (default: 3)')
     
     args = parser.parse_args()
     
-    # Create counter
+    # Create counter (model will be loaded once per worker process)
     human_counter = HumanInOutCounter(model_size=args.model)
 
     # If a video file is provided via CLI, analyze it immediately and exit
@@ -162,27 +175,28 @@ if __name__ == "__main__":
         sys.exit(0)
 
     power = LED(17)  # LED for indicating classroom power status
-    ultrasonic_left = DistanceSensor(echo=27, trigger=22)  # Ultrasonic sensors for movement detection
+    ultrasonic_left = DistanceSensor(echo=27, trigger=22)  # Ultrasonic sensors
     ultrasonic_right = DistanceSensor(echo=5, trigger=6)
 
     while True:
         
-        if is_human_present() :  # If an object is detected within 100 cm
+        if is_human_present():  # If an object is detected within range
             if not USB_Camera_preferred:
-                video_file = record_picamera( wait_time=10)
+                video_file = record_picamera(wait_time=10)
             else:
-                video_file = record_usb_camera( wait_time=10)
+                video_file = record_usb_camera(wait_time=10)
 
-            # Analyze recorded video
-
+            # Add to analysis queue
             video_stack.append(video_file)
 
+            # Start processing thread if not already running
             if processing_thread is None or not processing_thread.is_alive():
-                # Pass args to the thread
                 processing_thread = threading.Thread(target=process_video_stack, args=(human_counter, args))
                 processing_thread.start()
 
         sleep(0.5)  # Small delay to prevent busy-waiting
+        
+        # Update power LED based on occupancy
         if processing_thread is not None and not processing_thread.is_alive():
             if inside_classroom > 0:
                 power.on()  # Turn on power if there are people inside
