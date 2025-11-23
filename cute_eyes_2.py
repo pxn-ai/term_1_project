@@ -32,14 +32,14 @@ def show_suspicious_left():
     with canvas(device) as draw:
         # Left Eye (<)
         # Points: Top-right, Middle-left, Bottom-right
-        draw.point((3, 2), fill="white")
-        draw.point((2, 3), fill="white")
-        draw.point((3, 4), fill="white")
+        draw.point((2, 2), fill="white")
+        draw.point((1, 3), fill="white")
+        draw.point((2, 4), fill="white")
 
         # Right Eye (<)
-        draw.point((7, 2), fill="white")
-        draw.point((6, 3), fill="white")
-        draw.point((7, 4), fill="white")
+        draw.point((6, 2), fill="white")
+        draw.point((5, 3), fill="white")
+        draw.point((6, 4), fill="white")
 
         # Mouth (_)
         draw.line((3, 6, 4, 6), fill="white")
