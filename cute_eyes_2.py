@@ -15,14 +15,14 @@ def show_happy():
     # Expression: ( ^ _ ^ )
     with canvas(device) as draw:
         # Left Eye (^)
-        draw.point((0, 3), fill="white")
-        draw.point((1, 2), fill="white")
-        draw.point((2, 3), fill="white")
+        draw.point((0, 2), fill="white")
+        draw.point((1, 1), fill="white")
+        draw.point((2, 2), fill="white")
         
         # Right Eye (^)
-        draw.point((5, 3), fill="white")
-        draw.point((6, 2), fill="white")
-        draw.point((7, 3), fill="white")
+        draw.point((5, 2), fill="white")
+        draw.point((6, 1), fill="white")
+        draw.point((7, 2), fill="white")
         
         # Mouth (_) - A small line at the bottom
         draw.line((3, 7, 4, 7), fill="white")
@@ -34,14 +34,14 @@ def show_suspicious_left():
     with canvas(device) as draw:
         # Left Eye (<)
         # Points: Top-right, Middle-left, Bottom-right
-        draw.point((2, 2), fill="white")
-        draw.point((1, 3), fill="white")
-        draw.point((2, 4), fill="white")
+        draw.point((2, 1), fill="white")
+        draw.point((1, 2), fill="white")
+        draw.point((2, 3), fill="white")
 
         # Right Eye (<)
-        draw.point((6, 2), fill="white")
-        draw.point((5, 3), fill="white")
-        draw.point((6, 4), fill="white")
+        draw.point((6, 1), fill="white")
+        draw.point((5, 2), fill="white")
+        draw.point((6, 3), fill="white")
 
         # Mouth (_)
         draw.line((3, 7, 4, 7), fill="white")
@@ -53,14 +53,14 @@ def show_suspicious_right():
     with canvas(device) as draw:
         # Left Eye (>)
         # Points: Top-left, Middle-right, Bottom-left
-        draw.point((1, 2), fill="white")
-        draw.point((2, 3), fill="white")
-        draw.point((1, 4), fill="white")
+        draw.point((1, 1), fill="white")
+        draw.point((2, 2), fill="white")
+        draw.point((1, 3), fill="white")
 
         # Right Eye (>)
-        draw.point((5, 2), fill="white")
-        draw.point((6, 3), fill="white")
-        draw.point((5, 4), fill="white")
+        draw.point((5, 1), fill="white")
+        draw.point((6, 2), fill="white")
+        draw.point((5, 3), fill="white")
 
         # Mouth (_)
         draw.line((3, 7, 4, 7), fill="white")
