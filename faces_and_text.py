@@ -10,7 +10,7 @@ from luma.core.legacy.font import proportional, CP437_FONT, TINY_FONT
 # --- SETUP ---
 serial = spi(port=0, device=0, gpio=noop())
 # Remember to check your block_orientation (0, 90, -90)
-device = max7219(serial, cascaded=1, block_orientation=-90)
+device = max7219(serial, cascaded=1, block_orientation=180)
 
 # --- FACE FUNCTIONS (From before) ---
 def show_happy():
