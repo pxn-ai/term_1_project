@@ -9,6 +9,8 @@ import numpy as np
 from collections import defaultdict
 import json
 from datetime import datetime
+from multiprocessing import Pool, cpu_count, Manager
+import queue
 
 try:
     from ultralytics import YOLO
@@ -27,6 +29,11 @@ class HumanInOutCounter:
         """
         print(f"Loading YOLOv8{model_size} model with tracking...")
         self.model = YOLO(f'yolov8{model_size}.pt')
+        
+        # Enable INT8 quantization for Raspberry Pi (faster inference)
+        self.model.overrides['half'] = False  # Full precision on CPU
+        self.model.overrides['device'] = 'cpu'
+        
         print("✓ Model loaded\n")
         
         # Tracking settings
@@ -55,15 +62,10 @@ class HumanInOutCounter:
         print(f"Counting line set at {self.line_position*100:.0f}% from left")
     
     def analyze_video(self, video_path, output_path=None, show_preview=False, 
-                     skip_frames=1, count_line_pos=0.5):
+                     skip_frames=3, count_line_pos=0.5):
         """
         Analyze video and count humans entering/exiting
-        
-        video_path: Path to video file
-        output_path: Optional path to save annotated video
-        show_preview: Show video while processing (requires display)
-        skip_frames: Process every Nth frame for speed
-        count_line_pos: Position of counting line (0.0-1.0)
+        Optimized version with better performance
         """
         
         # Reset counters
@@ -75,7 +77,7 @@ class HumanInOutCounter:
         self.set_counting_line(count_line_pos)
         
         print("="*70)
-        print("VIDEO ANALYSIS - HUMAN IN/OUT COUNTER")
+        print("VIDEO ANALYSIS - HUMAN IN/OUT COUNTER (OPTIMIZED)")
         print("="*70)
         print(f"Video: {video_path}")
         print(f"Counting line position: {self.line_position*100:.0f}% from left")
@@ -94,19 +96,25 @@ class HumanInOutCounter:
         fps = int(cap.get(cv2.CAP_PROP_FPS))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
-        print(f"Resolution: {frame_width}x{frame_height}")
+        # Reduce processing resolution
+        target_width = 640
+        scale_factor = target_width / frame_width
+        target_height = int(frame_height * scale_factor)
+        
+        print(f"Original resolution: {frame_width}x{frame_height}")
+        print(f"Processing resolution: {target_width}x{target_height}")
         print(f"FPS: {fps}")
         print(f"Total frames: {total_frames}")
         print(f"Duration: {total_frames/fps:.1f} seconds\n")
         
         # Calculate counting line X position
-        line_x = int(frame_width * self.line_position)
+        line_x = int(target_width * self.line_position)
         
         # Setup video writer if output path specified
         out = None
         if output_path:
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
+            out = cv2.VideoWriter(output_path, fourcc, fps//skip_frames, (target_width, target_height))
             print(f"Output will be saved to: {output_path}\n")
         
         frame_count = 0
@@ -128,6 +136,9 @@ class HumanInOutCounter:
             
             processed_frames += 1
             
+            # Resize for faster processing
+            frame = cv2.resize(frame, (target_width, target_height))
+            
             # Run tracking
             results = self.model.track(
                 frame,
@@ -135,7 +146,8 @@ class HumanInOutCounter:
                 classes=[0],  # Only persons
                 persist=True,
                 verbose=False,
-                tracker="bytetrack.yaml"
+                tracker="bytetrack.yaml",
+                imgsz=target_width
             )
             
             # Process detections
@@ -177,70 +189,74 @@ class HumanInOutCounter:
                             self.direction_history[track_id] = "OUT"
                             print(f"Frame {frame_count}: Person {track_id} EXITED")
                     
-                    # Draw on frame
-                    # Color based on direction
-                    if track_id in self.direction_history:
-                        if self.direction_history[track_id] == "IN":
-                            color = (0, 255, 0)  # Green for entered
-                            status = "IN"
+                    # Draw on frame (only if output or preview requested)
+                    if output_path or show_preview:
+                        # Color based on direction
+                        if track_id in self.direction_history:
+                            if self.direction_history[track_id] == "IN":
+                                color = (0, 255, 0)  # Green for entered
+                                status = "IN"
+                            else:
+                                color = (0, 0, 255)  # Red for exited
+                                status = "OUT"
                         else:
-                            color = (0, 0, 255)  # Red for exited
-                            status = "OUT"
-                    else:
-                        color = (255, 0, 0)  # Blue for tracking
-                        status = "TRACKING"
-                    
-                    # Draw bounding box
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                    
-                    # Draw label
-                    label = f"ID:{track_id} {status}"
-                    cv2.putText(frame, label, (x1, y1 - 10),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-                    
-                    # Draw tracking trail
-                    points = np.array(self.track_history[track_id], dtype=np.int32)
-                    if len(points) > 1:
-                        cv2.polylines(frame, [points], False, color, 2)
+                            color = (255, 0, 0)  # Blue for tracking
+                            status = "TRACKING"
+                        
+                        # Draw bounding box
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                        
+                        # Draw label
+                        label = f"ID:{track_id} {status}"
+                        cv2.putText(frame, label, (x1, y1 - 10),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                        
+                        # Draw tracking trail
+                        points = np.array(self.track_history[track_id], dtype=np.int32)
+                        if len(points) > 1:
+                            cv2.polylines(frame, [points], False, color, 2)
             
-            # Draw counting line
-            cv2.line(frame, (line_x, 0), (line_x, frame_height), (255, 255, 0), 3)
-            cv2.putText(frame, "COUNTING LINE", (line_x + 10, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
-            
-            # Draw statistics overlay
-            overlay = frame.copy()
-            cv2.rectangle(overlay, (10, 10), (300, 130), (0, 0, 0), -1)
-            cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
-            
-            cv2.putText(frame, f"ENTERED: {self.entered}", (20, 40),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-            cv2.putText(frame, f"EXITED: {self.exited}", (20, 75),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-            cv2.putText(frame, f"INSIDE: {self.entered - self.exited}", (20, 110),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-            
-            # Progress indicator
-            progress = (frame_count / total_frames) * 100
-            cv2.putText(frame, f"Progress: {progress:.1f}%", 
-                       (frame_width - 200, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-            
-            # Write frame to output video
-            if out:
-                out.write(frame)
-            
-            # Show preview if requested
-            if show_preview:
-                cv2.imshow('Human In/Out Counter', frame)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    print("\nStopped by user")
-                    break
+            # Draw annotations only if needed
+            if output_path or show_preview:
+                # Draw counting line
+                cv2.line(frame, (line_x, 0), (line_x, target_height), (255, 255, 0), 3)
+                cv2.putText(frame, "COUNTING LINE", (line_x + 10, 30),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                
+                # Draw statistics overlay
+                overlay = frame.copy()
+                cv2.rectangle(overlay, (10, 10), (300, 130), (0, 0, 0), -1)
+                cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+                
+                cv2.putText(frame, f"ENTERED: {self.entered}", (20, 40),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                cv2.putText(frame, f"EXITED: {self.exited}", (20, 75),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                cv2.putText(frame, f"INSIDE: {self.entered - self.exited}", (20, 110),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                
+                # Progress indicator
+                progress = (frame_count / total_frames) * 100
+                cv2.putText(frame, f"Progress: {progress:.1f}%", 
+                           (target_width - 200, 30),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                
+                # Write frame to output video
+                if out:
+                    out.write(frame)
+                
+                # Show preview if requested
+                if show_preview:
+                    cv2.imshow('Human In/Out Counter', frame)
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        print("\nStopped by user")
+                        break
             
             # Progress update every 30 processed frames
             if processed_frames % 30 == 0:
                 elapsed = (datetime.now() - start_time).total_seconds()
                 fps_processing = processed_frames / elapsed if elapsed > 0 else 0
+                progress = (frame_count / total_frames) * 100
                 print(f"Progress: {progress:.1f}% | Processing FPS: {fps_processing:.1f}")
         
         # Cleanup
