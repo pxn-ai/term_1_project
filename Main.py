@@ -7,8 +7,13 @@ import os
 import threading
 from time import time, sleep
 import cv2
-from picamera2 import Picamera2
-from gpiozero import LED, UltrasonicSensor
+try:
+    from picamera2 import Picamera2
+except ImportError:
+    Picamera2 = None
+    print("Warning: picamera2 not found. PiCamera recording will not work.")
+
+from gpiozero import LED, DistanceSensor
 from Human_Identifier import HumanInOutCounter  # Imports the Custom Model we built
 
 detection_range = 20  # in cm
@@ -21,6 +26,10 @@ def record_picamera( wait_time = 10 ):
     ''' Records a video clip until human movement is detected by Ultrasonic sensor.
         wait_time : duration of the wait in seconds.
     '''
+    if Picamera2 is None:
+        print("Error: Picamera2 is not available.")
+        return None
+
     picam2 = Picamera2()
     video_config = picam2.create_video_configuration(main={"size": (frame_width, frame_height)})
     picam2.configure(video_config)
@@ -74,11 +83,15 @@ def record_usb_camera( wait_time = 10 ):
     print(f"Video saved as {video_filename}")
     return video_filename
     
-def is_human_present() :
+def is_human_present(left_sensor=None, right_sensor=None) :
     ''' Checks if a human is present using the Ultrasonic sensors. '''
     global ultrasonic_left, ultrasonic_right, detection_range
-    distance_left = ultrasonic_left.distance * 100  # Convert to cm
-    distance_right = ultrasonic_right.distance * 100  # Convert to cm
+    
+    sensor_l = left_sensor if left_sensor else ultrasonic_left
+    sensor_r = right_sensor if right_sensor else ultrasonic_right
+    
+    distance_left = sensor_l.distance * 100  # Convert to cm
+    distance_right = sensor_r.distance * 100  # Convert to cm
     return distance_left < detection_range or distance_right < detection_range
 
 def analyze_video( video_filename , human_counter : HumanInOutCounter, args ):
@@ -99,13 +112,13 @@ def analyze_video( video_filename , human_counter : HumanInOutCounter, args ):
 
     return net_count_in
 
-def process_video_stack( human_counter ):
+def process_video_stack( human_counter, args ):
     ''' Processes videos in the stack one by one. '''
     global inside_classroom
     
     while len(video_stack) > 0:
         video_file = video_stack.pop(0)
-        net_count = analyze_video(video_file, human_counter)
+        net_count = analyze_video(video_file, human_counter, args)
         print(f"Net people entered: {net_count}")
         inside_classroom += net_count
         if inside_classroom < 0:
@@ -149,8 +162,8 @@ if __name__ == "__main__":
         sys.exit(0)
 
     power = LED(17)  # LED for indicating classroom power status
-    ultrasonic_left = UltrasonicSensor(echo=27, trigger=22)  # Ultrasonic sensors for movement detection
-    ultrasonic_right = UltrasonicSensor(echo=5, trigger=6)
+    ultrasonic_left = DistanceSensor(echo=27, trigger=22)  # Ultrasonic sensors for movement detection
+    ultrasonic_right = DistanceSensor(echo=5, trigger=6)
 
     while True:
         

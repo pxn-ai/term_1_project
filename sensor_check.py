@@ -2,7 +2,7 @@
 Check the both Ultrasonic sensors and LEDs.
 '''
 
-from gpiozero import UltrasonicSensor, LED
+from gpiozero import DistanceSensor, LED
 from time import sleep
 from Main import is_human_present
 
@@ -18,8 +18,8 @@ def ultrasonic_check(sensor):
 
 if __name__ == "__main__":
     # Initialize Ultrasonic Sensors
-    ultrasonic_left = UltrasonicSensor(echo=27, trigger=22)
-    ultrasonic_right = UltrasonicSensor(echo=5, trigger=6)
+    ultrasonic_left = DistanceSensor(echo=27, trigger=22)
+    ultrasonic_right = DistanceSensor(echo=5, trigger=6)
 
     # Initialize LEDs
     led = LED(17)
@@ -33,7 +33,7 @@ if __name__ == "__main__":
             # Check Ultrasonic Sensors
             left_distance = ultrasonic_check(ultrasonic_left)
             right_distance = ultrasonic_check(ultrasonic_right)
-            human_present = is_human_present()
+            human_present = is_human_present(ultrasonic_left, ultrasonic_right)
             print(
                 f"Left Distance: {left_distance:.2f} cm  |  "
                 f"Right Distance: {right_distance:.2f} cm  |  "
