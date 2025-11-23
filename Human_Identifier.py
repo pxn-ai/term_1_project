@@ -20,10 +20,12 @@ except ImportError:
     from ultralytics import YOLO
 
 
+import math
+
 def process_video_segment(segment_info, model_path, conf_threshold):
     """
     Process a segment of video frames in a separate process
-    Returns movements dictionary for this segment
+    Returns movements dictionary and track metadata for stitching
     """
     video_path, start_frame, end_frame, segment_id = segment_info
     
@@ -31,10 +33,12 @@ def process_video_segment(segment_info, model_path, conf_threshold):
     model = YOLO(model_path)
     
     movements = defaultdict(list)
+    track_meta = {}  # Store start/end info for stitching
+    
     cap = cv2.VideoCapture(video_path)
     
     if not cap.isOpened():
-        return {}
+        return {}, {}
     
     # Jump to start frame
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
@@ -72,16 +76,31 @@ def process_video_segment(segment_info, model_path, conf_threshold):
             )
             
             # Extract positions from batch results
-            for result in results:
+            for i, result in enumerate(results):
+                current_frame_idx = frame_count - len(frames_batch) + i + 1
+                
                 if result.boxes.id is not None:
                     boxes = result.boxes.xyxy.cpu().numpy()
                     track_ids = result.boxes.id.cpu().numpy().astype(int)
                     
                     for box, track_id in zip(boxes, track_ids):
                         center_x = (box[0] + box[2]) / 2.0
-                        # Add segment offset to track_id to avoid conflicts
-                        unique_track_id = track_id + (segment_id * 1000)
-                        movements[unique_track_id].append(center_x)
+                        center_y = (box[1] + box[3]) / 2.0
+                        
+                        # Store movement (X only for counting logic)
+                        movements[track_id].append(center_x)
+                        
+                        # Update metadata for stitching
+                        if track_id not in track_meta:
+                            track_meta[track_id] = {
+                                'start_frame': current_frame_idx,
+                                'end_frame': current_frame_idx,
+                                'start_pos': (center_x, center_y),
+                                'end_pos': (center_x, center_y)
+                            }
+                        else:
+                            track_meta[track_id]['end_frame'] = current_frame_idx
+                            track_meta[track_id]['end_pos'] = (center_x, center_y)
             
             frames_batch = []
     
@@ -96,20 +115,34 @@ def process_video_segment(segment_info, model_path, conf_threshold):
             tracker="bytetrack.yaml"
         )
         
-        for result in results:
+        for i, result in enumerate(results):
+            current_frame_idx = frame_count - len(frames_batch) + i + 1
+            
             if result.boxes.id is not None:
                 boxes = result.boxes.xyxy.cpu().numpy()
                 track_ids = result.boxes.id.cpu().numpy().astype(int)
                 
                 for box, track_id in zip(boxes, track_ids):
                     center_x = (box[0] + box[2]) / 2.0
-                    unique_track_id = track_id + (segment_id * 1000)
-                    movements[unique_track_id].append(center_x)
+                    center_y = (box[1] + box[3]) / 2.0
+                    
+                    movements[track_id].append(center_x)
+                    
+                    if track_id not in track_meta:
+                        track_meta[track_id] = {
+                            'start_frame': current_frame_idx,
+                            'end_frame': current_frame_idx,
+                            'start_pos': (center_x, center_y),
+                            'end_pos': (center_x, center_y)
+                        }
+                    else:
+                        track_meta[track_id]['end_frame'] = current_frame_idx
+                        track_meta[track_id]['end_pos'] = (center_x, center_y)
     
     cap.release()
     
     print(f"[Worker {segment_id}] Completed: {len(movements)} tracks found")
-    return dict(movements)
+    return dict(movements), track_meta
 
 
 class HumanInOutCounter:
@@ -192,10 +225,66 @@ class HumanInOutCounter:
             )
             segment_results = pool.map(process_func, segments)
         
-        # Merge results from all segments
+        # Merge results from all segments with ID stitching
         all_movements = {}
-        for segment_movements in segment_results:
-            all_movements.update(segment_movements)
+        global_max_id = 0
+        
+        # Store tracks from previous segment that ended near the boundary
+        prev_segment_tracks = []
+        
+        for i, (seg_movements, seg_meta) in enumerate(segment_results):
+            current_segment_map = {}  # Map local_id -> global_id
+            
+            # Get segment boundary info
+            seg_start_frame = segments[i][1]
+            
+            # Process each track in current segment
+            for local_id, positions in seg_movements.items():
+                meta = seg_meta[local_id]
+                
+                # Try to match with previous segment
+                matched_id = None
+                
+                if i > 0:
+                    # Check if this track started near the beginning of this segment
+                    if meta['start_frame'] - seg_start_frame < 10:  # Within 10 frames of start
+                        best_dist = float('inf')
+                        
+                        for prev_id, prev_meta in prev_segment_tracks:
+                            # Check if previous track ended near the end of previous segment
+                            # (We don't have prev_seg_end_frame easily available here, but 
+                            # we know it's the same as current seg_start_frame)
+                            if seg_start_frame - prev_meta['end_frame'] < 10:
+                                # Calculate distance between end of prev and start of curr
+                                p1 = prev_meta['end_pos']
+                                p2 = meta['start_pos']
+                                dist = math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
+                                
+                                # Threshold for matching (e.g., 100 pixels)
+                                if dist < 100 and dist < best_dist:
+                                    best_dist = dist
+                                    matched_id = prev_id
+                
+                if matched_id is not None:
+                    global_id = matched_id
+                    print(f"Stitched track: Seg {i} ID {local_id} -> Global ID {global_id}")
+                else:
+                    # Create new global ID
+                    global_max_id += 1
+                    global_id = global_max_id
+                
+                current_segment_map[local_id] = global_id
+                
+                # Add to all_movements
+                if global_id not in all_movements:
+                    all_movements[global_id] = []
+                all_movements[global_id].extend(positions)
+            
+            # Prepare for next segment
+            prev_segment_tracks = []
+            for local_id, meta in seg_meta.items():
+                global_id = current_segment_map[local_id]
+                prev_segment_tracks.append((global_id, meta))
         
         processing_time = (datetime.now() - start_time).total_seconds()
         
