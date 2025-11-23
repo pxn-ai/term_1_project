@@ -8,7 +8,7 @@ from luma.led_matrix.device import max7219
 # We are using SPI port 0, device 0. 
 # 'cascaded=1' means you have 1 LED block. If you chain them later, change this number.
 serial = spi(port=0, device=0, gpio=noop())
-device = max7219(serial, cascaded=1, block_orientation=-90) # Orientation might need adjustment (0, 90, -90) based on how you hold it
+device = max7219(serial, cascaded=1, block_orientation=0) # Orientation might need adjustment (0, 90, -90) based on how you hold it
 
 # --- ANIMATION FUNCTIONS ---
 
