@@ -66,10 +66,14 @@ def record_usb_camera(wait_time=10):
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, frame_height)
     cap.set(cv2.CAP_PROP_FPS, 20)  # Lower FPS for smaller files
     
-    # OPTIMIZED: Use H.264 codec (better compression, faster processing)
-    fourcc = cv2.VideoWriter_fourcc(*'H264')  # Changed from XVID
-    video_filename = f"video_{int(time())}.mp4"  # Changed from .avi
-    out = cv2.VideoWriter(video_filename, fourcc, 20.0, (frame_width, frame_height))
+    # Get actual resolution set by camera (in case 640x360 isn't supported)
+    actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    # OPTIMIZED: Use mp4v codec (more compatible than H264 on default OpenCV builds)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Changed from H264
+    video_filename = f"video_{int(time())}.mp4"
+    out = cv2.VideoWriter(video_filename, fourcc, 20.0, (actual_width, actual_height))
 
     start_time = time()
     print("Movement detected! Recording video...")
