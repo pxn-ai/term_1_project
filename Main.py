@@ -208,6 +208,9 @@ if __name__ == "__main__":
     ultrasonic_left = DistanceSensor(echo=27, trigger=22, max_distance=4)  # Ultrasonic sensors for movement detection
     ultrasonic_right = DistanceSensor(echo=23, trigger=24, max_distance=4)
 
+    # initial human count inside classroom
+    inside_classroom = 0
+
     while True:
         
         if is_human_present() :  # If an object is detected within 100 cm
@@ -231,9 +234,10 @@ if __name__ == "__main__":
                 power.on()  # Turn on power if there are people inside
             else:
                 power.off()  # Turn off power if no one is inside
-            
-        # Clean up
-        clear_face()
-        show_happy()
-        print_lcd_time()
+
+        if not processing_thread.is_alive(): 
+            # Clean up
+            clear_face()
+            show_happy()
+            print_lcd_time(inside_classroom)
 
