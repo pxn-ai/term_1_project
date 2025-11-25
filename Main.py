@@ -210,34 +210,40 @@ if __name__ == "__main__":
 
     # initial human count inside classroom
     inside_classroom = 0
+    try :
+        while True:
+            
+            if is_human_present() :  # If an object is detected within 100 cm
+                if not USB_Camera_preferred:
+                    video_file = record_picamera( wait_time=5)
+                else:
+                    video_file = record_usb_camera( wait_time=5)
 
-    while True:
-        
-        if is_human_present() :  # If an object is detected within 100 cm
-            if not USB_Camera_preferred:
-                video_file = record_picamera( wait_time=5)
-            else:
-                video_file = record_usb_camera( wait_time=5)
+                # Analyze recorded video
 
-            # Analyze recorded video
+                video_stack.append(video_file)
 
-            video_stack.append(video_file)
+                if processing_thread is None or not processing_thread.is_alive():
+                    # Pass args to the thread
+                    processing_thread = threading.Thread(target=process_video_stack, args=(human_counter, args))
+                    processing_thread.start()
 
-            if processing_thread is None or not processing_thread.is_alive():
-                # Pass args to the thread
-                processing_thread = threading.Thread(target=process_video_stack, args=(human_counter, args))
-                processing_thread.start()
+            sleep(0.05)  # Small delay to prevent busy-waiting
+            if processing_thread is not None and not processing_thread.is_alive():
+                if inside_classroom > 0:
+                    power.on()  # Turn on power if there are people inside
+                else:
+                    power.off()  # Turn off power if no one is inside
 
-        sleep(0.05)  # Small delay to prevent busy-waiting
-        if processing_thread is not None and not processing_thread.is_alive():
-            if inside_classroom > 0:
-                power.on()  # Turn on power if there are people inside
-            else:
-                power.off()  # Turn off power if no one is inside
+            if not processing_thread.is_alive(): 
+                # Clean up
+                clear_face()
+                show_happy()
+                print_lcd_time(inside_classroom)
 
-        if not processing_thread.is_alive(): 
-            # Clean up
-            clear_face()
-            show_happy()
-            print_lcd_time(inside_classroom)
-
+    except KeyboardInterrupt:
+        print("Exiting program...")
+        print_lcd_message("Shutting down", "Goodbye!")
+        clear_face()
+        show_happy()
+        power.off()
