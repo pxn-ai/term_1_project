@@ -19,7 +19,7 @@ from Human_Identifier import HumanInOutCounter  # Imports the Custom Model we bu
 from lcd_display import print_lcd_message
 from eyes import show_happy, show_suspicious_left, show_suspicious_right, clear_face
 
-detection_range = 90  # in cm
+detection_range = 200  # in cm
 USB_Camera_preferred = True  # Set to False to use PiCamera instead of USB Camera
 inside_classroom = 0  # Initial count of classroom occupancy
 video_stack = []  # Stack of videos to be analyzed
@@ -190,16 +190,16 @@ if __name__ == "__main__":
         sys.exit(0)
 
     power = LED(17)  # LED for indicating classroom power status
-    ultrasonic_left = DistanceSensor(echo=27, trigger=22)  # Ultrasonic sensors for movement detection
-    ultrasonic_right = DistanceSensor(echo=23, trigger=24)
+    ultrasonic_left = DistanceSensor(echo=27, trigger=22, max_distance=4)  # Ultrasonic sensors for movement detection
+    ultrasonic_right = DistanceSensor(echo=23, trigger=24, max_distance=4)
 
     while True:
         
         if is_human_present() :  # If an object is detected within 100 cm
             if not USB_Camera_preferred:
-                video_file = record_picamera( wait_time=3)
+                video_file = record_picamera( wait_time=5)
             else:
-                video_file = record_usb_camera( wait_time=3)
+                video_file = record_usb_camera( wait_time=5)
 
             # Analyze recorded video
 
