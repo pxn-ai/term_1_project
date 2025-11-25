@@ -234,8 +234,7 @@ if __name__ == "__main__":
                     power.on()  # Turn on power if there are people inside
                 else:
                     power.off()  # Turn off power if no one is inside
-
-            if not processing_thread.is_alive(): 
+ 
                 # Clean up
                 clear_face()
                 show_happy()
