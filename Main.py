@@ -86,6 +86,8 @@ def record_usb_camera( wait_time = 10 ):
         clear_face()
         ret, frame = cap.read()
         if ret:
+            # Rotate frame 180 degrees before saving. before the camera is fixed upside down
+            frame = cv2.rotate(frame, cv2.ROTATE_180)
             out.write(frame)
 
         elapsed_time = time() - start_time
