@@ -7,7 +7,7 @@ from luma.led_matrix.device import max7219
 # --- SETUP ---
 # Remember to keep block_orientation at 0, 90, or -90 based on what worked for you last time!
 serial = spi(port=0, device=0, gpio=noop())
-device = max7219(serial, cascaded=1, block_orientation=180)
+device = max7219(serial, cascaded=1, block_orientation=0)
 
 # --- DRAWING FUNCTIONS ---
 
