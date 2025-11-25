@@ -169,9 +169,9 @@ if __name__ == "__main__":
         
         if is_human_present() :  # If an object is detected within 100 cm
             if not USB_Camera_preferred:
-                video_file = record_picamera( wait_time=10)
+                video_file = record_picamera( wait_time=3)
             else:
-                video_file = record_usb_camera( wait_time=10)
+                video_file = record_usb_camera( wait_time=3)
 
             # Analyze recorded video
 
@@ -182,7 +182,7 @@ if __name__ == "__main__":
                 processing_thread = threading.Thread(target=process_video_stack, args=(human_counter, args))
                 processing_thread.start()
 
-        sleep(0.5)  # Small delay to prevent busy-waiting
+        sleep(0.05)  # Small delay to prevent busy-waiting
         if processing_thread is not None and not processing_thread.is_alive():
             if inside_classroom > 0:
                 power.on()  # Turn on power if there are people inside

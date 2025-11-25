@@ -4,17 +4,12 @@ Check the both Ultrasonic sensors and LEDs.
 
 from gpiozero import DistanceSensor, LED
 from time import sleep
-from Main import is_human_present
 
 def LED_check(led):
     led.on()
     sleep(0.5)
     led.off()
     sleep(0.5)
-
-def ultrasonic_check(sensor):
-    distance = sensor.distance * 100  # Convert to centimeters
-    return distance
 
 if __name__ == "__main__":
     # Initialize Ultrasonic Sensors
@@ -23,7 +18,6 @@ if __name__ == "__main__":
 
     # Initialize LEDs
     led = LED(17)
-
     try:
         while True:
             # Check LEDs
@@ -31,9 +25,9 @@ if __name__ == "__main__":
             print("LED checked.")
 
             # Check Ultrasonic Sensors
-            left_distance = ultrasonic_check(ultrasonic_left)
-            right_distance = ultrasonic_check(ultrasonic_right)
-            human_present = is_human_present(ultrasonic_left, ultrasonic_right)
+            left_distance = ultrasonic_left.distance * 100  # Convert to cm
+            right_distance = ultrasonic_right.distance * 100  # Convert to cm
+            human_present = (left_distance < 100 or right_distance < 100)  # Example threshold for human presence
             print(
                 f"Left Distance: {left_distance:.2f} cm  |  "
                 f"Right Distance: {right_distance:.2f} cm  |  "
