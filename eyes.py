@@ -71,27 +71,28 @@ def clear_face():
     with canvas(device) as draw:
         pass # Draws nothing, clears screen
 
-# --- MAIN ANIMATION LOOP ---
-print("Displaying cute faces... Press Ctrl+C to stop.")
+if __name__ == "__main__":
+    # --- MAIN ANIMATION LOOP ---
+    print("Displaying cute faces... Press Ctrl+C to stop.")
 
-try:
-    while True:
-        # 1. Happy ( ^ _ ^ )
-        show_happy()
-        time.sleep(2)
-        
-        # 2. Suspicious Left ( < _ < )
-        show_suspicious_left()
-        time.sleep(1)
-        
-        # 3. Suspicious Right ( > _ > )
-        show_suspicious_right()
-        time.sleep(1)
-        
-        # Blink effect (Clear screen briefly)
-        clear_face()
-        time.sleep(0.2)
+    try:
+        while True:
+            # 1. Happy ( ^ _ ^ )
+            show_happy()
+            time.sleep(2)
+            
+            # 2. Suspicious Left ( < _ < )
+            show_suspicious_left()
+            time.sleep(1)
+            
+            # 3. Suspicious Right ( > _ > )
+            show_suspicious_right()
+            time.sleep(1)
+            
+            # Blink effect (Clear screen briefly)
+            clear_face()
+            time.sleep(0.2)
 
-except KeyboardInterrupt:
-    device.cleanup()
-    print("Goodbye!")
+    except KeyboardInterrupt:
+        device.cleanup()
+        print("Goodbye!")

@@ -16,6 +16,9 @@ except ImportError:
 from gpiozero import LED, DistanceSensor
 from Human_Identifier import HumanInOutCounter  # Imports the Custom Model we built
 
+from lcd_display import print_lcd_message
+from eyes import show_happy, show_suspicious_left, show_suspicious_right, clear_face
+
 detection_range = 90  # in cm
 USB_Camera_preferred = True  # Set to False to use PiCamera instead of USB Camera
 inside_classroom = 0  # Initial count of classroom occupancy
@@ -40,14 +43,28 @@ def record_picamera( wait_time = 10 ):
     video_filename = f"video_{int(time())}.h264"
     picam2.start_recording(video_filename)
 
+    print_lcd_message("Movement detected!", "Recording video...")
+    clear_face()
+    looking_left = False
     while True:
-        time_remaining = wait_time - (time() - start_time)
+        elapsed_time = time() - start_time
+        time_remaining = wait_time - elapsed_time
 
         if is_human_present() :  # If an object is detected within 100 cm
             if time_remaining <= wait_time:
                 time_remaining = wait_time  # Reset the timer if movement is detected
         if time_remaining <= 0:
+            clear_face()
+            print_lcd_message("Recording stopped", " ")
             break
+
+        if elapsed_time % 2 < 1:
+            print_lcd_message(f"Recording... {int(elapsed_time)}s", " ")
+            if looking_left:
+                show_suspicious_left()
+            else:
+                show_suspicious_right()
+
         sleep(0.1) # Small delay to prevent busy-waiting
     picam2.stop_recording()
     print(f"Video saved as {video_filename}")
@@ -66,17 +83,28 @@ def record_usb_camera( wait_time = 10 ):
     # Removed redundant outer while True loop
     print("Movement detected! Recording video...")
     while True:
+        clear_face()
         ret, frame = cap.read()
         if ret:
             out.write(frame)
 
-        time_remaining = wait_time - (time() - start_time)
+        elapsed_time = time() - start_time
+        time_remaining = wait_time - elapsed_time
         
         if is_human_present() :  # If an object is detected within 100 cm
             if time_remaining <= wait_time:
                 time_remaining = wait_time  # Reset the timer if movement is detected
         if time_remaining <= 0:
+            print_lcd_message("Recording stopped", " ") 
+            clear_face()
             break
+
+        if elapsed_time % 2 < 1:
+            print_lcd_message(f"Recording... {int(elapsed_time)}s", " ")
+            if (elapsed_time // 2) % 2 == 0:
+                show_suspicious_left()
+            else:
+                show_suspicious_right()
         sleep(0.1) # Small delay to prevent busy-waiting
     out.release()
     cap.release()
@@ -163,7 +191,7 @@ if __name__ == "__main__":
 
     power = LED(17)  # LED for indicating classroom power status
     ultrasonic_left = DistanceSensor(echo=27, trigger=22)  # Ultrasonic sensors for movement detection
-    ultrasonic_right = DistanceSensor(echo=5, trigger=6)
+    ultrasonic_right = DistanceSensor(echo=23, trigger=24)
 
     while True:
         
