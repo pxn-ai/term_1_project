@@ -16,7 +16,7 @@ except ImportError:
 from gpiozero import LED, DistanceSensor
 from Human_Identifier import HumanInOutCounter  # Imports the Custom Model we built
 
-from lcd_display import print_lcd_message, print_lcd_message
+from lcd_display import print_lcd_message, print_lcd_message, print_lcd_time
 from eyes import show_happy, show_suspicious_left, show_suspicious_right, clear_face, show_buffering
 
 detection_range = 200  # in cm
@@ -143,9 +143,13 @@ def analyze_video( video_filename , human_counter : HumanInOutCounter, args ):
     if args.json and net_count_in :
         human_counter.save_results(net_count_in, args.json)
 
-    print_lcd_message("Analysis complete", f"Net People entered: {net_count_in}" if net_count_in >= 0 else f"Net People left: {-net_count_in}")
+    print_lcd_message("Analysis", f"complete =D" )
     clear_face()
     show_happy()
+    if net_count_in >= 0:
+        print_lcd_message("Net People ", f"entered : {net_count_in}")
+    else:
+        print_lcd_message("Net People ", f"entered : {-net_count_in}")
     return net_count_in
 
 def process_video_stack( human_counter, args ):
@@ -227,3 +231,9 @@ if __name__ == "__main__":
                 power.on()  # Turn on power if there are people inside
             else:
                 power.off()  # Turn off power if no one is inside
+            
+        # Clean up
+        clear_face()
+        show_happy()
+        print_lcd_time()
+

@@ -17,16 +17,16 @@ def print_lcd_message(line1, line2):
     lcd.cursor_pos = (1, 0)
     lcd.write_string(line2)
 
-def print_lcd_time():
+def print_lcd_time(count_in : int):
     '''Prints the current date and time on the LCD display.'''
     now = datetime.now()
-    date_str = now.date().strftime("%Y-%m-%d")
-    time_str = now.time().strftime("%H:%M:%S")
+    date_str = now.date().strftime("%m-%d")
+    time_str = now.time().strftime("%H:%M")
     
     lcd.clear()
-    lcd.write_string(date_str)
+    lcd.write_string(date_str + " " + time_str )
     lcd.cursor_pos = (1, 0)
-    lcd.write_string(time_str)
+    lcd.write_string(f"In Class: {count_in}")
 
 if __name__ == "__main__":
     try :
