@@ -3,7 +3,7 @@ from time import sleep
 
 # Initialize Ultrasonic Sensor
 # Echo pin: 27, Trigger pin: 22
-ultrasonic = DistanceSensor(echo=23, trigger=24)
+ultrasonic = DistanceSensor(echo=27, trigger=22)
 
 print("Ultrasonic Sensor Test")
 print("Press Ctrl+C to exit")

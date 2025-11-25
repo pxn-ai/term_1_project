@@ -14,7 +14,7 @@ def LED_check(led):
 if __name__ == "__main__":
     # Initialize Ultrasonic Sensors
     ultrasonic_left = DistanceSensor(echo=27, trigger=22)
-    ultrasonic_right = DistanceSensor(echo=5, trigger=6)
+    ultrasonic_right = DistanceSensor(echo=23, trigger=24)
 
     # Initialize LEDs
     led = LED(17)
