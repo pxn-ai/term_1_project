@@ -130,7 +130,7 @@ def analyze_video( video_filename , human_counter : HumanInOutCounter, args ):
     '''
     
     print(f"Analyzing video {video_filename}...")
-    print_lcd_message("Let me think ...", "Counting your movements")
+    print_lcd_message("Let me think ...", "Counting people.")
     clear_face()
     show_buffering()
     # Analyze video
