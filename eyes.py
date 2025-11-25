@@ -71,7 +71,7 @@ def clear_face():
     with canvas(device) as draw:
         pass # Draws nothing, clears screen
 
-def show_buffering(duration=2.0, speed=0.1):
+def show_buffering(duration=10.0, speed=0.1):
     """
     Display a rotating buffering/loading animation.
     duration: Total time to show the animation in seconds.

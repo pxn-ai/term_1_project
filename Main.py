@@ -145,7 +145,7 @@ def analyze_video( video_filename , human_counter : HumanInOutCounter, args ):
 
     print_lcd_message("Analysis complete", f"Net People entered: {net_count_in}" if net_count_in >= 0 else f"Net People left: {-net_count_in}")
     clear_face()
-    show_happy() if net_count_in >= 0 else show_suspicious_left()
+    show_happy()
     return net_count_in
 
 def process_video_stack( human_counter, args ):
