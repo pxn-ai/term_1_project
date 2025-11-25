@@ -16,8 +16,8 @@ except ImportError:
 from gpiozero import LED, DistanceSensor
 from Human_Identifier import HumanInOutCounter  # Imports the Custom Model we built
 
-from lcd_display import print_lcd_message
-from eyes import show_happy, show_suspicious_left, show_suspicious_right, clear_face
+from lcd_display import print_lcd_message, print_lcd_message
+from eyes import show_happy, show_suspicious_left, show_suspicious_right, clear_face, show_buffering
 
 detection_range = 200  # in cm
 USB_Camera_preferred = True  # Set to False to use PiCamera instead of USB Camera
@@ -80,10 +80,10 @@ def record_usb_camera( wait_time = 10 ):
     out = cv2.VideoWriter(video_filename, fourcc, 20.0, (frame_width, frame_height))
 
     start_time = time()
-    # Removed redundant outer while True loop
     print("Movement detected! Recording video...")
+    print_lcd_message("Movement detected!", "Recording video...")
+    clear_face()
     while True:
-        clear_face()
         ret, frame = cap.read()
         if ret:
             # Rotate frame 180 degrees before saving. before the camera is fixed upside down
@@ -93,7 +93,7 @@ def record_usb_camera( wait_time = 10 ):
         elapsed_time = time() - start_time
         time_remaining = wait_time - elapsed_time
         
-        if is_human_present() :  # If an object is detected within 100 cm
+        if is_human_present() :  # If an object is detected within 
             if time_remaining <= wait_time:
                 time_remaining = wait_time  # Reset the timer if movement is detected
         if time_remaining <= 0:
@@ -130,6 +130,9 @@ def analyze_video( video_filename , human_counter : HumanInOutCounter, args ):
     '''
     
     print(f"Analyzing video {video_filename}...")
+    print_lcd_message("Let me think ...", "Counting your movements")
+    clear_face()
+    show_buffering()
     # Analyze video
     net_count_in = human_counter.get_net_entered_count(
         video_path=video_filename,
@@ -140,6 +143,9 @@ def analyze_video( video_filename , human_counter : HumanInOutCounter, args ):
     if args.json and net_count_in :
         human_counter.save_results(net_count_in, args.json)
 
+    print_lcd_message("Analysis complete", f"Net People entered: {net_count_in}" if net_count_in >= 0 else f"Net People left: {-net_count_in}")
+    clear_face()
+    show_happy() if net_count_in >= 0 else show_suspicious_left()
     return net_count_in
 
 def process_video_stack( human_counter, args ):
@@ -185,7 +191,10 @@ if __name__ == "__main__":
     
     # Create counter
     human_counter = HumanInOutCounter(model_size=args.model)
-
+    # Print initial message
+    print_lcd_message("Welcome to", "Smart Classroom")
+    clear_face()
+    show_happy()
     # If a video file is provided via CLI, analyze it immediately and exit
     if args.video:
         analyze_video(args.video, human_counter, args)

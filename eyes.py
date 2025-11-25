@@ -71,6 +71,45 @@ def clear_face():
     with canvas(device) as draw:
         pass # Draws nothing, clears screen
 
+def show_buffering(duration=2.0, speed=0.1):
+    """
+    Display a rotating buffering/loading animation.
+    duration: Total time to show the animation in seconds.
+    speed: Time between each frame in seconds.
+    """
+    # Define the 8 frames of a rotating spinner (clockwise)
+    # Each frame is a list of (x, y) points to light up
+    frames = [
+        [(3, 0), (4, 0)],                    # Top
+        [(5, 1), (6, 2)],                    # Top-right
+        [(7, 3), (7, 4)],                    # Right
+        [(6, 5), (5, 6)],                    # Bottom-right
+        [(4, 7), (3, 7)],                    # Bottom
+        [(2, 6), (1, 5)],                    # Bottom-left
+        [(0, 4), (0, 3)],                    # Left
+        [(1, 2), (2, 1)],                    # Top-left
+    ]
+    
+    start_time = time.time()
+    frame_index = 0
+    
+    while time.time() - start_time < duration:
+        with canvas(device) as draw:
+            # Draw center dot
+            draw.point((3, 3), fill="white")
+            draw.point((4, 3), fill="white")
+            draw.point((3, 4), fill="white")
+            draw.point((4, 4), fill="white")
+            
+            # Draw the current spinner segment and the two before it (trail effect)
+            for i in range(3):
+                idx = (frame_index - i) % len(frames)
+                for point in frames[idx]:
+                    draw.point(point, fill="white")
+        
+        frame_index = (frame_index + 1) % len(frames)
+        time.sleep(speed)
+
 if __name__ == "__main__":
     # --- MAIN ANIMATION LOOP ---
     print("Displaying cute faces... Press Ctrl+C to stop.")
@@ -92,6 +131,9 @@ if __name__ == "__main__":
             # Blink effect (Clear screen briefly)
             clear_face()
             time.sleep(0.2)
+
+            # 4. Buffering Animation
+            show_buffering(duration=4.0, speed=0.1)
 
     except KeyboardInterrupt:
         device.cleanup()

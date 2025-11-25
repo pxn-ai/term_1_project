@@ -17,6 +17,17 @@ def print_lcd_message(line1, line2):
     lcd.cursor_pos = (1, 0)
     lcd.write_string(line2)
 
+def print_lcd_time():
+    '''Prints the current date and time on the LCD display.'''
+    now = datetime.now()
+    date_str = now.date().strftime("%Y-%m-%d")
+    time_str = now.time().strftime("%H:%M:%S")
+    
+    lcd.clear()
+    lcd.write_string(date_str)
+    lcd.cursor_pos = (1, 0)
+    lcd.write_string(time_str)
+
 if __name__ == "__main__":
     try :
         # Clear the display
