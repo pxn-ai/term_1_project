@@ -132,7 +132,7 @@ def analyze_video( video_filename , human_counter : HumanInOutCounter, args ):
     print(f"Analyzing video {video_filename}...")
     print_lcd_message("Let me think ...", "Counting people.")
     clear_face()
-    show_buffering()
+    show_buffering(duration=120)
     # Analyze video
     net_count_in = human_counter.get_net_entered_count(
         video_path=video_filename,
