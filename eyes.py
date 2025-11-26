@@ -93,6 +93,7 @@ def show_buffering(duration=10.0, speed=0.1):
     start_time = time.time()
     frame_index = 0
     
+    clear_face()
     while time.time() - start_time < duration:
         with canvas(device) as draw:
             # Draw center dot
