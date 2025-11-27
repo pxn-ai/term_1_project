@@ -20,7 +20,7 @@ from lcd_display import print_lcd_message, print_lcd_message, print_lcd_time
 from eyes import show_happy, show_suspicious_left, show_suspicious_right, clear_face, show_buffering
 
 detection_range = 200  # in cm
-USB_Camera_preferred = True  # Set to False to use PiCamera instead of USB Camera
+USB_Camera_preferred = False  # Set to False to use PiCamera instead of USB Camera
 inside_classroom = 0  # Initial count of classroom occupancy
 video_stack = []  # Stack of videos to be analyzed
 frame_width, frame_height = 1280 , 720 # Width of the video frame
@@ -107,7 +107,7 @@ def record_usb_camera( wait_time = 10 ):
                 show_suspicious_left()
             else:
                 show_suspicious_right()
-        sleep(0.1) # Small delay to prevent busy-waiting
+        sleep(1) # Small delay to prevent busy-waiting
     out.release()
     cap.release()
     print(f"Video saved as {video_filename}")
@@ -209,8 +209,9 @@ if __name__ == "__main__":
     ultrasonic_right = DistanceSensor(echo=23, trigger=24, max_distance=4)
 
     # initial human count inside classroom
-    inside_classroom = 0
+    inside_classroom = 2
     try :
+        power.on()  # Turn on power initially``
         while True:
             
             if is_human_present() :  # If an object is detected within 100 cm
