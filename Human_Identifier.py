@@ -1,7 +1,6 @@
 """
 Video Human In/Out Counter for Raspberry Pi
-Analyzes video clips to count people entering and exiting
-Uses tracking to follow individuals across frames
+Uses YOLO object detection with ByteTrack to track and count people entering/exiting.
 """
 
 import cv2
@@ -22,52 +21,33 @@ except ImportError:
 
 
 class HumanInOutCounter:
+    """Tracks humans in video and counts entries/exits using a virtual counting line."""
+    
     def __init__(self, model_size='n'):
-        """
-        Initialize human counter with tracking
-        model_size: 'n' (nano - recommended for Pi)
-        """
+        """Initialize the counter with YOLOv8 model. Use 'n' (nano) for Raspberry Pi."""
         print(f"Loading YOLOv8{model_size} model with tracking...")
         self.model = YOLO(f'yolov8{model_size}.pt')
         
-        # Enable INT8 quantization for Raspberry Pi (faster inference)
-        self.model.overrides['half'] = False  # Full precision on CPU
+        self.model.overrides['half'] = False
         self.model.overrides['device'] = 'cpu'
-        
         print("✓ Model loaded\n")
         
-        # Tracking settings
         self.track_history = defaultdict(lambda: [])
         self.counted_ids = set()
-        
-        # Line position (percentage from top: 0.0 to 1.0)
-        self.line_position = 0.5  # Middle of frame
-        
-        # Direction tracking
+        self.line_position = 0.5
         self.direction_history = defaultdict(lambda: [])
-        
-        # Counters
         self.entered = 0
         self.exited = 0
-        
-        # Confidence threshold
         self.confidence_threshold = 0.4
         
     def set_counting_line(self, position=0.5):
-        """
-        Set the virtual line position for counting
-        position: 0.0 (left) to 1.0 (right), default 0.5 (middle)
-        """
+        """Set virtual counting line position (0.0=left to 1.0=right)."""
         self.line_position = max(0.1, min(0.9, position))
         print(f"Counting line set at {self.line_position*100:.0f}% from left")
     
     def analyze_video(self, video_path, output_path=None, show_preview=False, 
                      skip_frames=3, count_line_pos=0.5):
-        """
-        Analyze video and count humans entering/exiting
-        Optimized version with better performance
-        """
-        
+        """Analyze video to count people crossing the counting line."""
         # Reset counters
         self.track_history.clear()
         self.direction_history.clear()
@@ -90,13 +70,12 @@ class HumanInOutCounter:
             print(f"Error: Could not open video {video_path}")
             return None
         
-        # Get video properties
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = int(cap.get(cv2.CAP_PROP_FPS))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
-        # Reduce processing resolution
+        # Scale down for faster processing
         target_width = 640
         scale_factor = target_width / frame_width
         target_height = int(frame_height * scale_factor)
@@ -107,10 +86,8 @@ class HumanInOutCounter:
         print(f"Total frames: {total_frames}")
         print(f"Duration: {total_frames/fps:.1f} seconds\n")
         
-        # Calculate counting line X position
         line_x = int(target_width * self.line_position)
         
-        # Setup video writer if output path specified
         out = None
         if output_path:
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -130,16 +107,13 @@ class HumanInOutCounter:
             
             frame_count += 1
             
-            # Skip frames for performance
             if frame_count % skip_frames != 0:
                 continue
             
             processed_frames += 1
             
-            # Resize for faster processing
             frame = cv2.resize(frame, (target_width, target_height))
             
-            # Run tracking
             results = self.model.track(
                 frame,
                 conf=self.confidence_threshold,
@@ -150,7 +124,6 @@ class HumanInOutCounter:
                 imgsz=target_width
             )
             
-            # Process detections
             if results[0].boxes.id is not None:
                 boxes = results[0].boxes.xyxy.cpu().numpy()
                 track_ids = results[0].boxes.id.cpu().numpy().astype(int)
@@ -158,72 +131,58 @@ class HumanInOutCounter:
                 
                 for box, track_id, conf in zip(boxes, track_ids, confidences):
                     x1, y1, x2, y2 = map(int, box)
-                    
-                    # Calculate center point of bounding box
                     center_x = (x1 + x2) // 2
                     center_y = (y1 + y2) // 2
                     
-                    # Store track history
                     self.track_history[track_id].append((center_x, center_y))
                     
-                    # Keep only last 20 positions
                     if len(self.track_history[track_id]) > 20:
                         self.track_history[track_id].pop(0)
                     
-                    # Check if crossed line (only count once per ID)
+                    # Check if person crossed the counting line
                     if track_id not in self.counted_ids and len(self.track_history[track_id]) >= 2:
                         prev_x = self.track_history[track_id][-2][0]
                         curr_x = center_x
                         
-                        # Crossed line going right (ENTERED)
                         if prev_x < line_x <= curr_x:
                             self.entered += 1
                             self.counted_ids.add(track_id)
                             self.direction_history[track_id] = "IN"
                             print(f"Frame {frame_count}: Person {track_id} ENTERED")
                         
-                        # Crossed line going left (EXITED)
                         elif prev_x > line_x >= curr_x:
                             self.exited += 1
                             self.counted_ids.add(track_id)
                             self.direction_history[track_id] = "OUT"
                             print(f"Frame {frame_count}: Person {track_id} EXITED")
                     
-                    # Draw on frame (only if output or preview requested)
                     if output_path or show_preview:
-                        # Color based on direction
+                        # Color code: green=entered, red=exited, blue=tracking
                         if track_id in self.direction_history:
                             if self.direction_history[track_id] == "IN":
-                                color = (0, 255, 0)  # Green for entered
+                                color = (0, 255, 0)
                                 status = "IN"
                             else:
-                                color = (0, 0, 255)  # Red for exited
+                                color = (0, 0, 255)
                                 status = "OUT"
                         else:
-                            color = (255, 0, 0)  # Blue for tracking
+                            color = (255, 0, 0)
                             status = "TRACKING"
                         
-                        # Draw bounding box
                         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                        
-                        # Draw label
                         label = f"ID:{track_id} {status}"
                         cv2.putText(frame, label, (x1, y1 - 10),
                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
                         
-                        # Draw tracking trail
                         points = np.array(self.track_history[track_id], dtype=np.int32)
                         if len(points) > 1:
                             cv2.polylines(frame, [points], False, color, 2)
             
-            # Draw annotations only if needed
             if output_path or show_preview:
-                # Draw counting line
                 cv2.line(frame, (line_x, 0), (line_x, target_height), (255, 255, 0), 3)
                 cv2.putText(frame, "COUNTING LINE", (line_x + 10, 30),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
                 
-                # Draw statistics overlay
                 overlay = frame.copy()
                 cv2.rectangle(overlay, (10, 10), (300, 130), (0, 0, 0), -1)
                 cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
@@ -235,38 +194,32 @@ class HumanInOutCounter:
                 cv2.putText(frame, f"INSIDE: {self.entered - self.exited}", (20, 110),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
                 
-                # Progress indicator
                 progress = (frame_count / total_frames) * 100
                 cv2.putText(frame, f"Progress: {progress:.1f}%", 
                            (target_width - 200, 30),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
                 
-                # Write frame to output video
                 if out:
                     out.write(frame)
                 
-                # Show preview if requested
                 if show_preview:
                     cv2.imshow('Human In/Out Counter', frame)
                     if cv2.waitKey(1) & 0xFF == ord('q'):
                         print("\nStopped by user")
                         break
             
-            # Progress update every 30 processed frames
             if processed_frames % 30 == 0:
                 elapsed = (datetime.now() - start_time).total_seconds()
                 fps_processing = processed_frames / elapsed if elapsed > 0 else 0
                 progress = (frame_count / total_frames) * 100
                 print(f"Progress: {progress:.1f}% | Processing FPS: {fps_processing:.1f}")
         
-        # Cleanup
         cap.release()
         if out:
             out.release()
         if show_preview:
             cv2.destroyAllWindows()
         
-        # Final statistics
         processing_time = (datetime.now() - start_time).total_seconds()
         
         print("\n" + "="*70)
@@ -282,7 +235,6 @@ class HumanInOutCounter:
         print(f"  Total unique people tracked: {len(self.counted_ids)}")
         print("="*70 + "\n")
         
-        # Return results as dictionary
         results = {
             'video_path': video_path,
             'entered': self.entered,
@@ -298,42 +250,23 @@ class HumanInOutCounter:
         return results
     
     def save_results(self, results, output_file='results.json'):
-        """Save analysis results to JSON file"""
+        """Save analysis results to JSON file."""
         with open(output_file, 'w') as f:
             json.dump(results, f, indent=4)
         print(f"Results saved to {output_file}")
     
     def get_human_movements(self, video_file_path: str) -> dict:
         """
-        Analyzes video file and extracts human movement data
-        
-        Args:
-            video_file_path (str): Path to the video file
-        
-        Returns:
-            dict: Dictionary where:
-                  - key: track_id (int)
-                  - value: list of x_positions (center x coordinate) for each frame
-                  
-        Example output:
-            {
-                1: [320.5, 325.0, 330.2, 335.8, ...],  # Person 1's x positions
-                2: [640.1, 638.5, 635.0, 632.3, ...],  # Person 2's x positions
-                3: [150.0, 155.5, 160.2, ...]          # Person 3's x positions
-            }
+        Extract x-position history for each tracked person.
+        Returns: {track_id: [x_positions]}
         """
-        
-        # Initialize tracking dictionary
         movements = defaultdict(list)
-        
-        # Open video
         cap = cv2.VideoCapture(video_file_path)
         
         if not cap.isOpened():
             print(f"Error: Could not open video {video_file_path}")
             return {}
         
-        # Get video properties
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = int(cap.get(cv2.CAP_PROP_FPS))
         
@@ -351,39 +284,29 @@ class HumanInOutCounter:
             
             frame_count += 1
             
-            # Run tracking on frame
             results = self.model.track(
                 frame,
-                conf=0.4,           # Confidence threshold
-                classes=[0],        # Only detect persons (class 0)
-                persist=True,       # Keep track IDs consistent
-                verbose=False,      # Suppress output
+                conf=0.4,
+                classes=[0],
+                persist=True,
+                verbose=False,
                 tracker="bytetrack.yaml"
             )
             
-            # Extract tracking information
             if results[0].boxes.id is not None:
                 boxes = results[0].boxes.xyxy.cpu().numpy()
                 track_ids = results[0].boxes.id.cpu().numpy().astype(int)
                 
                 for box, track_id in zip(boxes, track_ids):
                     x1, y1, x2, y2 = box
-                    
-                    # Calculate center x position
                     center_x = (x1 + x2) / 2.0
-                    
-                    # Store x position for this track_id
                     movements[track_id].append(center_x)
             
-            # Progress indicator
             if frame_count % 100 == 0:
                 progress = (frame_count / total_frames) * 100
                 print(f"Progress: {progress:.1f}% ({frame_count}/{total_frames})")
         
-        # Cleanup
         cap.release()
-        
-        # Convert defaultdict to regular dict
         movements = dict(movements)
         
         print(f"\nAnalysis complete!")
@@ -394,17 +317,7 @@ class HumanInOutCounter:
         return movements
 
     def get_human_movements_with_y(self, video_file_path: str) -> dict:
-        """
-        Extended version that returns both x and y positions
-        
-        Returns:
-            dict: {
-                track_id: {
-                    'x': [x1, x2, x3, ...],
-                    'y': [y1, y2, y3, ...]
-                }
-            }
-        """
+        """Extract both x and y positions. Returns: {track_id: {'x': [], 'y': []}}"""
         movements = defaultdict(lambda: {'x': [], 'y': []})
         
         cap = cv2.VideoCapture(video_file_path)
@@ -442,20 +355,7 @@ class HumanInOutCounter:
         return dict(movements)
 
     def get_human_movements_detailed(self, video_file_path: str) -> dict:
-        """
-        Detailed version with complete bounding box and metadata
-        
-        Returns:
-            dict: {
-                track_id: {
-                    'frames': [frame_numbers],
-                    'x': [center_x positions],
-                    'y': [center_y positions],
-                    'bbox': [(x1, y1, x2, y2), ...],
-                    'confidence': [conf1, conf2, ...]
-                }
-            }
-        """
+        """Extract detailed tracking data including bounding boxes and confidence scores."""
         movements = defaultdict(lambda: {
             'frames': [],
             'x': [],
@@ -507,15 +407,7 @@ class HumanInOutCounter:
         return dict(movements)
 
     def analyze_movement_statistics(self, movements: dict) -> dict:
-        """
-        Calculate statistics from movement data
-        
-        Args:
-            movements: Output from get_human_movements()
-        
-        Returns:
-            dict: Statistics for each track_id
-        """
+        """Calculate movement statistics (displacement, direction) for each tracked person."""
         stats = {}
         
         for track_id, x_positions in movements.items():
@@ -538,23 +430,20 @@ class HumanInOutCounter:
         
         return stats
     
-    def get_net_entered_count(self, video_path, count_line_pos= 0.5 ) :
-        """Return current counting results as integer ( net change ) """
+    def get_net_entered_count(self, video_path, count_line_pos=0.5):
+        """Return net count of people who crossed the line (entered - exited)."""
         results = self.get_human_movements(video_path)
         if results is None:
             return 0
         
         net_change = 0
         for positions in results.values():
-            if positions[0] < positions[-1] and positions[-1] > count_line_pos :
+            if positions[0] < positions[-1] and positions[-1] > count_line_pos:
                 net_change += 1
-            elif positions[0] > positions[-1] and positions[-1] < count_line_pos :
+            elif positions[0] > positions[-1] and positions[-1] < count_line_pos:
                 net_change -= 1
 
         return net_change
-
-
-# Main execution
 if __name__ == "__main__":
     import sys
     import argparse

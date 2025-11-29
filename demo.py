@@ -1,17 +1,18 @@
+"""Demo script for testing LED matrix expressions and LCD display."""
+
 from eyes import show_buffering, show_suspicious_right, show_suspicious_left, clear_face, show_happy
 from time import sleep
 from lcd_display import print_lcd_message, print_lcd_time
 from gpiozero import LED
 
-power = LED(17)  # GPIO pin to control power
-
+power = LED(17)
 
 power.off()
 print_lcd_message("Let me think ...", "Counting people.")
 show_buffering(duration=2)
 print_lcd_message("Net people ", f"entered : 1")
 show_happy()
-power.on()  # Turn on power initially
+power.on()
 
 sleep(2)
 
