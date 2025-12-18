@@ -1,47 +1,115 @@
 <div align="center">
 
+<!-- Banner -->
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=180&section=header&text=Smart%20Classroom&fontSize=50&fontColor=fff&animation=twinkling&fontAlignY=35&desc=AI-Powered%20Occupancy%20Counter&descSize=20&descAlignY=55"/>
+
 # 🎓 Smart Classroom Occupancy Counter
 
-### *AI-Powered Human Detection & Tracking System for Raspberry Pi*
+### *Intelligent Human Detection & Tracking System for Raspberry Pi*
+
+<br/>
 
 [![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.x-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white)](https://opencv.org)
 [![YOLOv8](https://img.shields.io/badge/YOLOv8-Ultralytics-00FFFF?style=for-the-badge)](https://ultralytics.com)
 [![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-4B-C51A4A?style=for-the-badge&logo=raspberry-pi&logoColor=white)](https://raspberrypi.org)
 
-*A smart IoT solution that automatically counts people entering and exiting a classroom using computer vision, ultrasonic sensors, and machine learning.*
+<br/>
 
-**University of Moratuwa | ENTC | Term 1 Project**
+*A cutting-edge IoT solution that automatically counts people entering and exiting classrooms using computer vision, ultrasonic sensors, and deep learning.*
+
+<br/>
+
+**🏫 University of Moratuwa | 📡 Dept. of Electronics & Telecommunications | 📅 Term 1 Project**
 
 ---
 
-<img src="https://img.shields.io/badge/Status-Active-success?style=flat-square" alt="Status">
-<img src="https://img.shields.io/badge/Hardware-Raspberry%20Pi%204B-red?style=flat-square" alt="Hardware">
+<img src="https://img.shields.io/badge/Status-✅%20Completed-success?style=flat-square" alt="Status"/>
+<img src="https://img.shields.io/badge/Hardware-Raspberry%20Pi%204B-red?style=flat-square" alt="Hardware"/>
+<img src="https://img.shields.io/badge/Year-2024-blue?style=flat-square" alt="Year"/>
 
 </div>
 
 ---
 
-## 📖 Table of Contents
+## 🌟 Project Highlights
 
-- [✨ Features](#-features)
-- [🏗️ System Architecture](#️-system-architecture)
-- [🔧 Hardware Requirements](#-hardware-requirements)
-- [📦 Software Requirements](#-software-requirements)
-- [🚀 Installation & Setup](#-installation--setup)
-- [💻 Usage](#-usage)
-- [📁 Project Structure](#-project-structure)
-- [🔌 Hardware Wiring](#-hardware-wiring)
-- [🎯 How It Works](#-how-it-works)
-- [⚙️ Configuration](#️-configuration)
-- [🤝 Contributing](#-contributing)
+<table>
+<tr>
+<td width="50%">
+
+### 🎯 What We Built
+A **complete smart classroom system** that:
+- 📹 Detects motion using ultrasonic sensors
+- 🧠 Identifies humans with YOLOv8 AI
+- 📊 Tracks and counts entries/exits
+- 💡 Controls lighting based on occupancy
+- 📺 Displays status on LCD screen
+- 😊 Shows animated faces on LED matrix
+
+</td>
+<td width="50%">
+
+### 🏆 Key Achievements
+- ✅ Real-time human tracking with ByteTrack
+- ✅ Dual camera support (PiCamera + USB)
+- ✅ Multi-threaded video processing
+- ✅ Smart light automation
+- ✅ Interactive visual feedback
+- ✅ Complete hardware integration
+
+</td>
+</tr>
+</table>
+
+---
+
+## 📸 Project Gallery
+
+<div align="center">
+
+### 👥 The Team
+
+<img src="media/photos/Group_photo.png" alt="Team Photo" width="700"/>
+
+*The amazing team behind this project from the Department of Electronics & Telecommunications Engineering, University of Moratuwa*
+
+---
+
+### 🔧 Our Prototype
+
+<img src="media/photos/prototype.png" alt="Hardware Prototype" width="600"/>
+
+*The complete hardware setup with Raspberry Pi, sensors, LCD display, and LED matrix*
+
+</div>
+
+---
+
+## 🎥 Video Presentation
+
+<div align="center">
+
+https://github.com/pxn-ai/term_1_project/releases/download/v1.0.0/Video_presentation.mp4
+
+> 📹 **[⬇️ Download Full Video Presentation](https://github.com/pxn-ai/term_1_project/releases/download/v1.0.0/Video_presentation.mp4)**
+>
+> *The video showcases the complete system in action, including motion detection, human tracking, counting mechanism, and visual feedback.*
+
+</div>
+
+---
+
+## 📊 Presentation Slides
+
+📑 **[View Project Presentation (PPTX)](docs/Project_presentation.pptx)**
 
 ---
 
 ## ✨ Features
 
 | Feature | Description |
-|---------|-------------|
+|:-------:|-------------|
 | 🎥 **Motion-Triggered Recording** | Ultrasonic sensors detect movement and automatically start recording |
 | 🧠 **AI-Powered Detection** | YOLOv8 + ByteTrack for accurate human tracking |
 | 📊 **Entry/Exit Counting** | Virtual counting line tracks people crossing in both directions |
@@ -56,30 +124,30 @@
 ## 🏗️ System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    SMART CLASSROOM SYSTEM                          │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐         │
-│   │  Ultrasonic  │    │   Camera     │    │    GPIO      │         │
-│   │   Sensors    │───▶│  (Pi/USB)    │───▶│   Control    │         │
-│   │  (L & R)     │    │              │    │   (Lights)   │         │
-│   └──────────────┘    └──────────────┘    └──────────────┘         │
-│          │                   │                   ▲                  │
-│          ▼                   ▼                   │                  │
-│   ┌──────────────────────────────────────────────┴─────┐           │
-│   │                   Main.py                          │           │
-│   │         (Motion Detection & Recording)             │           │
-│   └──────────────────────────────────────────────────┬─┘           │
-│                              │                       │              │
-│                              ▼                       ▼              │
-│   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐         │
-│   │   YOLOv8     │    │  LCD 16x2    │    │  LED Matrix  │         │
-│   │  ByteTrack   │    │   Display    │    │   8x8 Face   │         │
-│   │  (Counting)  │    │   (Status)   │    │  (Emotions)  │         │
-│   └──────────────┘    └──────────────┘    └──────────────┘         │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        SMART CLASSROOM SYSTEM                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐      │
+│   │   🔊 Ultrasonic   │    │    📷 Camera      │    │    💡 GPIO       │      │
+│   │     Sensors       │───▶│   (Pi/USB)       │───▶│    Control       │      │
+│   │   (Left & Right)  │    │                  │    │    (Lights)      │      │
+│   └──────────────────┘    └──────────────────┘    └──────────────────┘      │
+│            │                       │                       ▲                 │
+│            ▼                       ▼                       │                 │
+│   ┌────────────────────────────────────────────────────────┴─────┐          │
+│   │                         Main.py                               │          │
+│   │              (Motion Detection & Recording)                   │          │
+│   └────────────────────────────────────────────────────────┬─────┘          │
+│                                │                           │                 │
+│                                ▼                           ▼                 │
+│   ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐      │
+│   │    🧠 YOLOv8      │    │    📟 LCD 16x2    │    │   ✨ LED Matrix   │      │
+│   │    ByteTrack     │    │     Display      │    │    8x8 Face      │      │
+│   │   (Counting)     │    │    (Status)      │    │   (Emotions)     │      │
+│   └──────────────────┘    └──────────────────┘    └──────────────────┘      │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -87,31 +155,19 @@
 ## 🔧 Hardware Requirements
 
 | Component | Specification | Quantity |
-|-----------|---------------|----------|
+|:---------:|---------------|:--------:|
 | 🖥️ **Raspberry Pi** | Model 4B (2GB+ RAM recommended) | 1 |
 | 📷 **Camera** | Pi Camera Module v2 / USB Webcam | 1 |
 | 📡 **Ultrasonic Sensor** | HC-SR04 | 2 |
 | 📟 **LCD Display** | 16x2 I2C Character LCD (PCF8574) | 1 |
-| 💡 **LED Matrix** | 8x8 MAX7219 | 1 |
-| 🔌 **LED** | Standard LED (for power indicator) | 1 |
+| ✨ **LED Matrix** | 8x8 MAX7219 | 1 |
+| 💡 **LED** | Standard LED (for power indicator) | 1 |
 | 🔗 **Jumper Wires** | Male-Female, Male-Male | Various |
 | ⚡ **Power Supply** | 5V 3A USB-C | 1 |
 
 ---
 
 ## 📦 Software Requirements
-
-### Python Packages
-
-```txt
-ultralytics>=8.0.0    # YOLOv8 object detection
-opencv-python>=4.8.0  # Computer vision
-numpy>=1.24.0         # Numerical operations
-gpiozero>=1.6.2       # GPIO control
-picamera2>=0.3.12     # Pi Camera support
-RPLCD>=1.3.0          # LCD display driver
-luma.led_matrix>=1.7  # LED matrix driver
-```
 
 ### System Requirements
 
@@ -120,6 +176,62 @@ luma.led_matrix>=1.7  # LED matrix driver
 - **SPI:** Enabled for LED matrix
 - **I2C:** Enabled for LCD display
 - **Camera:** Enabled in raspi-config
+
+### Python Packages
+
+```bash
+pip install -r requirements.txt
+```
+
+<details>
+<summary>📋 View all dependencies</summary>
+
+| Package | Purpose |
+|---------|---------|
+| `ultralytics>=8.0.0` | YOLOv8 object detection |
+| `opencv-python>=4.8.0` | Computer vision |
+| `numpy>=1.24.0` | Numerical operations |
+| `gpiozero>=1.6.2` | GPIO control |
+| `picamera2>=0.3.12` | Pi Camera support |
+| `RPLCD>=1.3.0` | LCD display driver |
+| `luma.led_matrix>=1.7` | LED matrix driver |
+
+</details>
+
+---
+
+## 📁 Project Structure
+
+```
+term_1_project/
+│
+├── 📂 src/                        # Source code
+│   ├── 🚀 Main.py                 # Main application entry point
+│   ├── 🧠 Human_Identifier.py     # YOLOv8 human detection & tracking
+│   ├── 👁️ eyes.py                 # LED matrix facial expressions
+│   ├── 📺 lcd_display.py          # 16x2 LCD display controller
+│   ├── 🎭 faces_and_text.py       # LED matrix faces with scrolling text
+│   └── 🤖 yolov8n.pt              # YOLOv8 nano model weights
+│
+├── 📂 utils/                      # Utility scripts
+│   ├── 🔬 sensor_check.py         # Hardware testing utility
+│   ├── 🎬 demo.py                 # Component demonstration script
+│   ├── 📝 practise_file.py        # Sensor practice script
+│   └── 🔧 light_control.sh        # Shell script for virtual env
+│
+├── 📂 media/                      # Media files
+│   ├── 📸 photos/                 # Project photos
+│   │   ├── Group_photo.png        # Team photo
+│   │   └── prototype.png          # Hardware prototype
+│   └── 🎥 videos/                 # Video presentations
+│       └── Video_presentation.mp4
+│
+├── 📂 docs/                       # Documentation
+│   └── 📑 Project_presentation.pptx
+│
+├── 📋 requirements.txt            # Python dependencies
+└── 📖 README.md                   # This file
+```
 
 ---
 
@@ -153,26 +265,17 @@ source venv/bin/activate
 
 ```bash
 pip install --upgrade pip
-pip install ultralytics opencv-python numpy gpiozero
-pip install RPLCD luma.led_matrix picamera2
+pip install -r requirements.txt
 ```
 
-### Step 5: Download YOLOv8 Model (Auto-downloads on first run)
-
-```bash
-# The yolov8n.pt file will be automatically downloaded
-# Or manually download:
-wget https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt
-```
-
-### Step 6: Verify Hardware Connections
+### Step 5: Verify Hardware Connections
 
 ```bash
 # Test sensors and LED
-python sensor_check.py
+python utils/sensor_check.py
 
 # Test LCD and LED matrix
-python demo.py
+python utils/demo.py
 ```
 
 ---
@@ -184,6 +287,7 @@ python demo.py
 Run the complete smart classroom system with motion detection:
 
 ```bash
+cd src
 python Main.py
 ```
 
@@ -197,6 +301,7 @@ python Main.py --model n --line 0.5 --skip 1
 Analyze a pre-recorded video:
 
 ```bash
+cd src
 python Main.py video.mp4 --output result.mp4 --preview
 ```
 
@@ -212,33 +317,6 @@ python Main.py video.mp4 --output result.mp4 --preview
 | `--line` | Counting line position (0.0-1.0) | `0.5` |
 | `--json` | Save results to JSON | None |
 
-### Quick Demo
-
-```bash
-# Run the demo to test all components
-python demo.py
-```
-
----
-
-## 📁 Project Structure
-
-```
-term_1_project/
-│
-├── 🚀 Main.py                 # Main application entry point
-├── 🧠 Human_Identifier.py     # YOLOv8 human detection & tracking
-├── 👁️ eyes.py                 # LED matrix facial expressions
-├── 📺 lcd_display.py          # 16x2 LCD display controller
-├── 🎭 faces_and_text.py       # LED matrix faces with scrolling text
-├── 🔬 sensor_check.py         # Hardware testing utility
-├── 🎬 demo.py                 # Component demonstration script
-├── 🔧 light_control.sh        # Shell script for virtual env
-├── 🤖 yolov8n.pt              # YOLOv8 nano model weights
-├── 📖 README.md               # This file
-└── 📂 __pycache__/            # Python cache files
-```
-
 ---
 
 ## 🔌 Hardware Wiring
@@ -246,7 +324,7 @@ term_1_project/
 ### GPIO Pin Configuration
 
 | Component | GPIO Pin | Physical Pin |
-|-----------|----------|--------------|
+|-----------|:--------:|:------------:|
 | **Power LED** | GPIO 17 | Pin 11 |
 | **Left Ultrasonic Trigger** | GPIO 22 | Pin 15 |
 | **Left Ultrasonic Echo** | GPIO 27 | Pin 13 |
@@ -258,52 +336,45 @@ term_1_project/
 | **SPI SCLK (LED Matrix)** | GPIO 11 | Pin 23 |
 | **SPI CE0 (LED Matrix)** | GPIO 8 | Pin 24 |
 
-### Wiring Diagram
-
-```
-                    Raspberry Pi 4B
-              ┌─────────────────────────┐
-              │   ┌───────────────┐     │
-              │   │               │     │
-    [LCD]─────│───│  I2C (3,5)    │     │
-              │   │               │     │
- [MAX7219]────│───│  SPI (19,23,24)     │
-              │   │               │     │
-[HC-SR04 L]───│───│  GPIO 22,27  │     │
-              │   │               │     │
-[HC-SR04 R]───│───│  GPIO 23,24  │     │
-              │   │               │     │
-   [LED]──────│───│  GPIO 17     │     │
-              │   └───────────────┘     │
-              └─────────────────────────┘
-```
-
 ---
 
 ## 🎯 How It Works
 
-### 1️⃣ Motion Detection
-- Two ultrasonic sensors continuously monitor the doorway
-- When someone comes within 2 meters, recording begins
+<div align="center">
 
-### 2️⃣ Video Recording
-- Camera captures video while motion is detected
-- Recording continues for 5 seconds after last detection
+```mermaid
+flowchart TD
+    A[👤 Person Approaches] -->|Motion Detected| B[📡 Ultrasonic Sensors]
+    B -->|Distance < 2m| C[📹 Start Recording]
+    C --> D[🧠 YOLOv8 Detection]
+    D --> E[🎯 ByteTrack Tracking]
+    E --> F{Crossed Line?}
+    F -->|Left → Right| G[✅ Count IN]
+    F -->|Right → Left| H[❌ Count OUT]
+    G --> I[📊 Update Occupancy]
+    H --> I
+    I -->|Occupancy > 0| J[💡 Lights ON]
+    I -->|Occupancy = 0| K[🌙 Lights OFF]
+    J --> L[📺 Update LCD]
+    K --> L
+    L --> M[😊 LED Expression]
+```
 
-### 3️⃣ AI Analysis
-- YOLOv8 nano model detects humans in each frame
-- ByteTrack algorithm assigns unique IDs to each person
-- Virtual counting line tracks direction of movement
+</div>
 
-### 4️⃣ Occupancy Update
-- System calculates net entries (entered - exited)
-- Updates classroom occupancy count
-- Controls room lighting based on occupancy
+### Step-by-Step Process
 
-### 5️⃣ Visual Feedback
-- LCD shows current status and occupancy count
-- LED matrix displays animated facial expressions
-- Happy face 😊 when idle, suspicious face 👀 when recording
+| Step | Description |
+|:----:|-------------|
+| **1️⃣** | Two ultrasonic sensors continuously monitor the doorway |
+| **2️⃣** | When someone comes within 2 meters, recording begins |
+| **3️⃣** | Camera captures video while motion is detected |
+| **4️⃣** | YOLOv8 nano model detects humans in each frame |
+| **5️⃣** | ByteTrack algorithm assigns unique IDs to each person |
+| **6️⃣** | Virtual counting line tracks direction of movement |
+| **7️⃣** | System calculates net entries (entered - exited) |
+| **8️⃣** | Room lighting is controlled based on occupancy |
+| **9️⃣** | LCD shows status, LED matrix displays expressions |
 
 ---
 
@@ -311,7 +382,7 @@ term_1_project/
 
 ### Adjusting Detection Range
 
-In `Main.py`, modify:
+In `src/Main.py`, modify:
 ```python
 detection_range = 200  # Distance in cm (default: 2 meters)
 ```
@@ -328,13 +399,6 @@ USB_Camera_preferred = False  # True for USB webcam, False for PiCamera
 frame_width, frame_height = 1280, 720  # Video resolution
 ```
 
-### Counting Line Position
-
-```python
-# 0.0 = left edge, 1.0 = right edge
-python Main.py --line 0.5  # Center of frame
-```
-
 ---
 
 ## 🖥️ Running on a Laptop (Simulation Mode)
@@ -348,6 +412,7 @@ pip install ultralytics opencv-python numpy
 
 ### 2. Analyze Video Files
 ```bash
+cd src
 python Human_Identifier.py --video your_video.mp4 --output result.mp4 --preview
 ```
 
@@ -358,11 +423,11 @@ python Human_Identifier.py --video your_video.mp4 --output result.mp4 --preview
 ## 📊 Performance Tips
 
 | Tip | Description |
-|-----|-------------|
-| 🔧 Use `--skip 2` | Process every 2nd frame for faster analysis |
-| 📉 Use model `n` | Nano model is optimized for Raspberry Pi |
-| 🔄 Reduce resolution | Lower resolution = faster processing |
-| 🧊 Add heatsink | Prevent thermal throttling on Pi |
+|:---:|-------------|
+| 🔧 | Use `--skip 2` to process every 2nd frame for faster analysis |
+| 📉 | Use model `n` (nano) which is optimized for Raspberry Pi |
+| 🔄 | Reduce resolution for faster processing |
+| 🧊 | Add heatsink to prevent thermal throttling on Pi |
 
 ---
 
@@ -396,12 +461,30 @@ This project is part of the **University of Moratuwa ENTC curriculum**.
 
 ---
 
+## 🙏 Acknowledgements
+
+- **University of Moratuwa** - For providing the opportunity and resources
+- **Department of Electronics & Telecommunications** - For guidance and support
+- **Ultralytics** - For the amazing YOLOv8 framework
+- Our mentors and instructors for their valuable guidance
+
+---
+
 <div align="center">
 
 ### Made with ❤️ by ENTC Students
 
-**University of Moratuwa, Sri Lanka**
+**University of Moratuwa, Sri Lanka 🇱🇰**
 
-⭐ Star this repo if you found it helpful!
+<br/>
+
+[![GitHub stars](https://img.shields.io/github/stars/pxn-ai/term_1_project?style=social)](https://github.com/pxn-ai/term_1_project)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Share-blue?style=social&logo=linkedin)](https://linkedin.com)
+
+<br/>
+
+⭐ **Star this repo if you found it helpful!** ⭐
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=100&section=footer"/>
 
 </div>

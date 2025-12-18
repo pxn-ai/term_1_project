@@ -1,0 +1,17 @@
+# Smart Classroom Occupancy Counter - Requirements
+# Python 3.9+ required
+
+# AI/ML Dependencies
+ultralytics>=8.0.0          # YOLOv8 object detection
+
+# Computer Vision
+opencv-python>=4.8.0        # Video processing and analysis
+numpy>=1.24.0               # Numerical operations
+
+# Raspberry Pi GPIO & Hardware
+gpiozero>=1.6.2             # GPIO control for sensors and LEDs
+picamera2>=0.3.12           # PiCamera support (Raspberry Pi only)
+
+# Display Drivers
+RPLCD>=1.3.0                # I2C LCD display driver
+luma.led_matrix>=1.7.0      # MAX7219 LED matrix driver
