@@ -72,7 +72,7 @@ A **complete smart classroom system** that:
 
 <img src="media/photos/Group_photo.png" alt="Team Photo" width="700"/>
 
-*The amazing team behind this project from the Department of Electronics & Telecommunications Engineering, University of Moratuwa*
+*The team behind this project from the Department of Electronics & Telecommunications Engineering, University of Moratuwa*
 
 ---
 
